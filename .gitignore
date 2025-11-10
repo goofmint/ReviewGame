@@ -1,0 +1,23 @@
+node_modules
+
+/.cache
+/build
+.env
+.wrangler
+
+# Test coverage
+coverage
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Generated files
+app/data/problems.ts
