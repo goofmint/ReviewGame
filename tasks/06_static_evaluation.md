@@ -151,6 +151,8 @@ interface ResultData {
 
 ## Phase 2への準備
 
+### インタフェース定義
+
 ```typescript
 // 将来的に実装するインタフェース（Phase 1では未使用）
 
@@ -164,6 +166,103 @@ interface EvaluationResult {
 
 // Phase 2 でこの構造を返すAPIを実装
 // Phase 1 では定義のみ、実装なし
+```
+
+### テキストサニタイゼーション（セキュリティ境界）
+
+```typescript
+// app/utils/sanitize.ts
+
+// 使用ライブラリ: DOMPurify (https://github.com/cure53/DOMPurify)
+// または isomorphic-dompurify (サーバーサイド対応版)
+import DOMPurify from 'isomorphic-dompurify';
+
+interface SanitizeOptions {
+  allowedTags?: string[];
+  allowedAttributes?: Record<string, string[]>;
+}
+
+// Phase 2 でのデフォルト設定
+const DEFAULT_SANITIZE_OPTIONS: SanitizeOptions = {
+  // 許可するHTMLタグ（安全なフォーマット用タグのみ）
+  allowedTags: [
+    'p',      // 段落
+    'br',     // 改行
+    'strong', // 太字
+    'em',     // イタリック
+    'ul',     // 順序なしリスト
+    'ol',     // 順序ありリスト
+    'li',     // リスト項目
+    'code',   // インラインコード
+    'pre',    // コードブロック
+  ],
+  // 許可する属性（なし）
+  allowedAttributes: {}
+};
+
+// 明示的に禁止する要素（XSS対策）
+const FORBIDDEN_ELEMENTS = [
+  'script',   // スクリプト実行
+  'iframe',   // 外部コンテンツ埋め込み
+  'object',   // プラグイン実行
+  'embed',    // 外部リソース埋め込み
+  'link',     // 外部スタイルシート
+  'style',    // インラインスタイル
+  'base',     // ベースURL変更
+  'form',     // フォーム送信
+  'input',    // ユーザー入力
+  'button',   // ボタン
+];
+
+// 明示的に禁止する属性（XSS対策）
+const FORBIDDEN_ATTRIBUTES = [
+  /^on/,      // すべてのイベントハンドラ（onclick, onload, etc.）
+  'href',     // リンク（フィッシング対策）
+  'src',      // 外部リソース読み込み
+  'data',     // データ属性
+  'action',   // フォームアクション
+  'formaction', // フォームアクション
+];
+
+/**
+ * LLM出力をサニタイズして安全なHTMLに変換
+ *
+ * セキュリティ境界：
+ * - LLMの出力は信頼できないユーザー入力として扱う
+ * - XSS攻撃を防ぐため、危険なタグと属性をすべて除去
+ * - DOMPurify を使用して確実にサニタイズ
+ *
+ * @param html - サニタイズ対象のHTML文字列
+ * @param options - カスタムサニタイズオプション
+ * @returns サニタイズされた安全なHTML文字列
+ */
+export function sanitizeHtml(
+  html: string,
+  options: SanitizeOptions = DEFAULT_SANITIZE_OPTIONS
+): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: options.allowedTags,
+    ALLOWED_ATTR: [], // 属性は一切許可しない
+    FORBID_TAGS: FORBIDDEN_ELEMENTS,
+    FORBID_ATTR: FORBIDDEN_ATTRIBUTES,
+  });
+}
+
+/**
+ * プレーンテキストをHTMLエスケープ
+ * Phase 1 でのユーザーレビュー表示に使用
+ */
+export function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// 実装の注意点：
+// 1. Phase 1 ではプレーンテキスト表示のみ（escapeHtml を使用）
+// 2. Phase 2 でLLM出力を表示する際は必ず sanitizeHtml を使用
+// 3. サニタイゼーションはサーバーサイドとクライアントサイド両方で実施
+// 4. DOMPurify のバージョンは常に最新に保つ（脆弱性対策）
 ```
 
 ## 検証項目

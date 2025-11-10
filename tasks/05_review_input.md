@@ -57,14 +57,31 @@ interface ValidationRule {
 }
 
 interface ReviewValidationRules {
-  minLength: number;      // 最小文字数（例: 10文字）
-  maxLength: number;      // 最大文字数（例: 5000文字）
-  required: boolean;      // 必須チェック
+  minLength: number;      // 最小文字数（Phase 1 デフォルト: 10）
+  maxLength: number;      // 最大文字数（Phase 1 デフォルト: 5000）
+  required: boolean;      // 必須チェック（Phase 1 デフォルト: true）
 }
 
+// Phase 1 のデフォルトバリデーションルール
+const DEFAULT_VALIDATION_RULES: ReviewValidationRules = {
+  minLength: 10,
+  maxLength: 5000,
+  required: true
+};
+
 // レビュー内容のバリデーションを実行
+// rules が指定されない場合は DEFAULT_VALIDATION_RULES を使用
 // エラーメッセージを返す
-export function validateReview(content: string): ReviewValidation;
+export function validateReview(
+  content: string,
+  rules: ReviewValidationRules = DEFAULT_VALIDATION_RULES
+): ReviewValidation;
+
+// 実装の説明：
+// - content が空文字列で required が true の場合: エラー「レビューを入力してください」
+// - content.length < minLength の場合: エラー「レビューは{minLength}文字以上入力してください」
+// - content.length > maxLength の場合: エラー「レビューは{maxLength}文字以内で入力してください」
+// - すべてのチェックに合格: { isValid: true, errors: [] }
 ```
 
 ## フォーム処理
