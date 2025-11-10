@@ -19,9 +19,6 @@ export default defineConfig(({ mode }) => {
           }),
       tsconfigPaths(),
     ],
-    ssr: {
-      noExternal: ["react-dom"],
-    },
     test: {
       globals: true,
       environment: "happy-dom",
