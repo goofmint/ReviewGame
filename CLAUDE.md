@@ -82,8 +82,14 @@
   - プロンプトエンジニアリングで評価精度を確保
 
 ### 3.4 コンテンツ管理
-- **MDX/Markdown**: 問題・要件・お手本レビューを記述
-- ファイルベース管理（DBなし）
+- **Markdown**: 問題・要件・お手本レビューを記述
+  - ソースファイル：`problems/`ディレクトリに配置
+  - ビルド時処理：gray-matterでMarkdownをパース
+  - 出力：TypeScriptファイルとしてバンドル
+- **ビルドプロセス**：
+  - ビルドスクリプト（`scripts/build-problems.ts`）で自動変換
+  - `app/data/problems.ts`を生成（静的インポート可能）
+  - DBやKV不要、ファイルシステムアクセスなし
 
 ### 3.5 画像ストレージ
 - **Cloudflare R2**: シェア画像の保存
@@ -96,6 +102,20 @@
   - サーバーサイドでの画像レンダリング
   - JSXライクな構文で画像をデザイン
   - PNGフォーマットで出力
+
+### 3.7 ビルドツール
+- **gray-matter**: MarkdownのFront Matter解析
+- **tsx**: TypeScriptビルドスクリプトの実行
+- 依存パッケージ：
+  ```json
+  {
+    "devDependencies": {
+      "gray-matter": "^4.0.3",
+      "tsx": "^4.7.0",
+      "@types/node": "^20.10.0"
+    }
+  }
+  ```
 
 ## 4. アーキテクチャ設計
 
@@ -121,15 +141,16 @@ ReviewGame/
 │   │   └── ShareButton.tsx      # Xシェアボタン
 │   ├── utils/
 │   │   ├── llm.ts              # LLM連携ロジック
-│   │   ├── problemLoader.ts    # 問題読み込み
 │   │   ├── scorer.ts           # スコア計算
 │   │   ├── imageGenerator.ts   # OG画像生成
 │   │   ├── r2.ts               # R2アップロードユーティリティ
 │   │   └── share.ts            # シェアテキスト生成
+│   ├── data/
+│   │   └── problems.ts         # ビルド時に自動生成される問題データ
 │   ├── types/
 │   │   └── problem.ts          # 型定義
 │   └── root.tsx
-├── problems/
+├── problems/                   # ソースファイル（Markdown）
 │   ├── javascript/
 │   │   ├── level1.md
 │   │   ├── level2.md
@@ -142,6 +163,8 @@ ReviewGame/
 │       ├── level1.md
 │       ├── level2.md
 │       └── level3.md
+├── scripts/
+│   └── build-problems.ts       # ビルド時にMarkdown→TSに変換
 ├── public/
 │   └── images/
 │       └── coderabbit-icon.png  # CodeRabbitアイコン
@@ -191,6 +214,67 @@ function validateAge(age) {
    - `age <= 150` で上限チェック
    - それぞれに適切なエラーメッセージを設定
 \`\`\`
+```
+
+### 4.3 ビルドプロセス
+
+ビルド時に`scripts/build-problems.ts`を実行し、Markdownファイルを読み込んでTypeScriptファイルに変換します。
+
+```typescript
+// scripts/build-problems.ts の例
+import fs from 'fs';
+import path from 'path';
+import matter from 'gray-matter';
+
+const problemsDir = path.join(process.cwd(), 'problems');
+const languages = ['javascript', 'python', 'flutter'];
+const levels = [1, 2, 3];
+
+const allProblems = {};
+
+languages.forEach(lang => {
+  allProblems[lang] = {};
+  levels.forEach(level => {
+    const filePath = path.join(problemsDir, lang, `level${level}.md`);
+    const fileContent = fs.readFileSync(filePath, 'utf8');
+    const { data, content } = matter(fileContent);
+
+    // Markdownをセクションごとに分割
+    const sections = content.split(/^# /m).filter(Boolean);
+    const requirements = sections.find(s => s.startsWith('要件'))?.replace('要件\n\n', '').trim();
+    const codeSection = sections.find(s => s.startsWith('コード'));
+    const code = codeSection?.match(/```[\s\S]*?\n([\s\S]*?)```/)?.[1]?.trim();
+    const modelReview = sections.find(s => s.startsWith('お手本レビュー'))?.replace('お手本レビュー\n\n', '').trim();
+
+    allProblems[lang][level] = {
+      title: data.title,
+      difficulty: data.difficulty,
+      language: data.language,
+      requirements,
+      code,
+      modelReview
+    };
+  });
+});
+
+// app/data/problems.ts に出力
+const outputPath = path.join(process.cwd(), 'app/data/problems.ts');
+const output = `// このファイルは自動生成されます。直接編集しないでください。
+export const problems = ${JSON.stringify(allProblems, null, 2)} as const;
+`;
+
+fs.writeFileSync(outputPath, output, 'utf8');
+```
+
+**package.jsonのスクリプト**:
+```json
+{
+  "scripts": {
+    "prebuild": "tsx scripts/build-problems.ts",
+    "build": "remix vite:build",
+    "dev": "tsx scripts/build-problems.ts && remix vite:dev"
+  }
+}
 ```
 
 ## 5. データ構造
@@ -264,10 +348,17 @@ interface ShareResult {
 
 ### 6.1 問題読み込みフロー
 
+**ビルド時**:
+1. `scripts/build-problems.ts` が実行される
+2. `problems/` ディレクトリ内の全Markdownファイルを読み込み
+3. gray-matterでFront Matterとコンテンツを解析
+4. TypeScript形式で `app/data/problems.ts` に出力
+
+**ランタイム時**:
 1. ユーザーが言語とレベルを選択
-2. `problemLoader.ts` が対応するMarkdownファイルを読み込み
-3. Front Matterとコンテンツを解析
-4. Problem型オブジェクトに変換して返却
+2. ルートコンポーネントで `import { problems } from '~/data/problems'`
+3. `problems[language][level]` で該当する問題データを取得
+4. Problem型オブジェクトとして使用（ファイルI/O不要）
 
 ### 6.2 コード/要件クリック時の自動入力
 
@@ -401,9 +492,7 @@ compatibility_date = "2024-01-01"
 [site]
 bucket = "./public"
 
-[[kv_namespaces]]
-binding = "PROBLEMS"
-id = "your-kv-namespace-id"
+# 問題データはビルド時にバンドルされるためKV不要
 
 [[r2_buckets]]
 binding = "SHARE_IMAGES"
@@ -472,7 +561,11 @@ preview_bucket_name = "review-game-share-images-preview"
 ## 12. パフォーマンス最適化
 
 - Cloudflare Workersでエッジキャッシング
-- 問題ファイルの事前ビルド時読み込み（可能であれば）
+- **問題データの最適化**：
+  - ビルド時に全問題をバンドル（9問のみで軽量）
+  - ランタイムでのファイルI/O不要
+  - 即座にアクセス可能（レイテンシゼロ）
+  - Workersのバンドルサイズ制限内に収まる（問題データは数KB程度）
 - LLM応答のキャッシング（同一レビュー内容の場合）
 - Code Splittingによる初期ロード最適化
 - **R2画像の最適化**：
@@ -483,11 +576,21 @@ preview_bucket_name = "review-game-share-images-preview"
 
 ## 13. 今後の拡張性
 
-- 新しい言語の追加が容易（問題ファイルを追加するだけ）
-- レベル数の拡張が容易
-- カスタム問題のインポート機能
-- マルチプレイヤーモード
-- AIによる問題自動生成
+- **新しい言語の追加が容易**：
+  - `problems/{language}/` ディレクトリを追加
+  - ビルドスクリプトで自動的に検出・変換
+- **レベル数の拡張が容易**：
+  - Markdownファイルを追加するだけ
+  - 型定義を更新すれば型安全性も維持
+- **問題数が大幅に増えた場合の対応**：
+  - 現状：9問（軽量、バンドル可能）
+  - 将来的に100問以上になる場合：
+    - Cloudflare KVへの移行を検討
+    - または問題を動的にfetchする形式に変更
+    - Route単位でのCode Splittingを活用
+- **カスタム問題のインポート機能**
+- **マルチプレイヤーモード**
+- **AIによる問題自動生成**
 
 ---
 
