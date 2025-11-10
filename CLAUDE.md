@@ -39,6 +39,32 @@
 - 70点以上で次のレベルがアンロック
 - 「もう一度挑戦」「次のレベルへ」「言語選択に戻る」ボタン
 
+### 2.6 ソーシャルシェア機能（X連携）
+- **シェアボタン**：結果表示画面に「Xでシェア」ボタンを表示
+- **シェア画像生成**：
+  - 評価スコアとプログラミング言語を含むOG画像を動的生成
+  - 画像サイズ：1200x630px（X/Twitterカード推奨サイズ）
+  - デザイン要素：
+    - スコア（大きく中央に表示）
+    - プログラミング言語名とレベル
+    - 背景グラデーション（言語ごとに色分け）
+    - CodeRabbitのアイコン画像を右下に配置
+- **R2への画像保存**：
+  - 生成した画像をCloudflare R2に保存
+  - ファイル名形式：`share/{language}/{level}/{timestamp}.png`
+  - 公開URL経由でアクセス可能に設定
+- **Xポストテンプレート**：
+  ```
+  #CodeRabbit コードレビューゲームで{score}点を獲得しました！
+  言語: {language} | レベル: {level}
+
+  {gameURL}
+  ```
+- **ポスト機能**：
+  - X API（旧Twitter API）またはWeb Intent経由でのシェア
+  - 画像付きツイート（R2の画像URLを添付）
+  - ゲームURLを含めて誘導
+
 ## 3. 技術スタック
 
 ### 3.1 フロントエンド/バックエンド
@@ -59,6 +85,18 @@
 - **MDX/Markdown**: 問題・要件・お手本レビューを記述
 - ファイルベース管理（DBなし）
 
+### 3.5 画像ストレージ
+- **Cloudflare R2**: シェア画像の保存
+  - S3互換のオブジェクトストレージ
+  - 公開バケット設定で直接アクセス可能
+  - 低コストで大容量ストレージ
+
+### 3.6 画像生成
+- **@vercel/og** または **Canvas API**: OG画像の動的生成
+  - サーバーサイドでの画像レンダリング
+  - JSXライクな構文で画像をデザイン
+  - PNGフォーマットで出力
+
 ## 4. アーキテクチャ設計
 
 ### 4.1 ディレクトリ構成
@@ -70,7 +108,8 @@ ReviewGame/
 │   │   ├── _index.tsx           # 言語選択画面
 │   │   ├── $lang._index.tsx     # レベル選択画面
 │   │   ├── $lang.$level.tsx     # 問題表示・レビュー画面
-│   │   └── api.evaluate.tsx     # レビュー評価API
+│   │   ├── api.evaluate.tsx     # レビュー評価API
+│   │   └── api.share-image.tsx  # シェア画像生成API
 │   ├── components/
 │   │   ├── LanguageSelector.tsx
 │   │   ├── LevelSelector.tsx
@@ -78,11 +117,15 @@ ReviewGame/
 │   │   ├── CodeDisplay.tsx
 │   │   ├── RequirementsDisplay.tsx
 │   │   ├── ReviewInput.tsx
-│   │   └── ResultView.tsx
+│   │   ├── ResultView.tsx
+│   │   └── ShareButton.tsx      # Xシェアボタン
 │   ├── utils/
 │   │   ├── llm.ts              # LLM連携ロジック
 │   │   ├── problemLoader.ts    # 問題読み込み
-│   │   └── scorer.ts           # スコア計算
+│   │   ├── scorer.ts           # スコア計算
+│   │   ├── imageGenerator.ts   # OG画像生成
+│   │   ├── r2.ts               # R2アップロードユーティリティ
+│   │   └── share.ts            # シェアテキスト生成
 │   ├── types/
 │   │   └── problem.ts          # 型定義
 │   └── root.tsx
@@ -100,6 +143,8 @@ ReviewGame/
 │       ├── level2.md
 │       └── level3.md
 ├── public/
+│   └── images/
+│       └── coderabbit-icon.png  # CodeRabbitアイコン
 ├── package.json
 ├── tsconfig.json
 ├── tailwind.config.ts
@@ -198,6 +243,23 @@ interface ProgressState {
 }
 ```
 
+### 5.5 ShareImageData型
+
+```typescript
+interface ShareImageData {
+  score: number;
+  language: 'javascript' | 'python' | 'flutter';
+  level: 1 | 2 | 3;
+  timestamp: number;
+}
+
+interface ShareResult {
+  imageUrl: string;         // R2に保存された画像のURL
+  tweetText: string;        // 生成されたツイートテキスト
+  tweetUrl: string;         // X Web IntentのURL
+}
+```
+
 ## 6. 主要機能の実装フロー
 
 ### 6.1 問題読み込みフロー
@@ -246,6 +308,45 @@ interface ProgressState {
 5. EvaluationResult型で返却
 6. スコアが70以上なら次レベルをアンロック（ローカルストレージに保存）
 
+### 6.4 シェア画像生成とXポストフロー
+
+1. ユーザーが結果画面で「Xでシェア」ボタンをクリック
+2. クライアントから `/api/share-image` にPOSTリクエスト
+   - パラメータ：`{ score, language, level }`
+3. サーバー側で画像生成処理：
+   ```typescript
+   // imageGenerator.ts
+   - Canvas APIまたは@vercel/ogを使用
+   - 1200x630pxの画像を生成
+   - スコアを中央に大きく表示
+   - 言語名とレベルを表示
+   - 背景にグラデーション（言語ごとに異なる色）
+   - CodeRabbitアイコンを右下に配置
+   ```
+4. 生成した画像をR2にアップロード：
+   ```typescript
+   // r2.ts
+   - ファイル名：`share/${language}/${level}/${timestamp}.png`
+   - Content-Type: image/png
+   - 公開アクセス可能に設定
+   ```
+5. R2の公開URLを取得
+6. ツイートテキストを生成：
+   ```
+   #CodeRabbit コードレビューゲームで{score}点を獲得しました！
+   言語: {language} | レベル: {level}
+
+   https://review-game.example.com
+   ```
+7. X Web Intent URLを生成：
+   ```
+   https://twitter.com/intent/tweet?
+     text={encodeURIComponent(tweetText)}&
+     url={encodeURIComponent(imageUrl)}
+   ```
+8. クライアントに `{ imageUrl, tweetText, tweetUrl }` を返却
+9. クライアントで新しいタブを開いてtweetUrlにアクセス
+
 ## 7. 状態管理
 
 ### 7.1 サーバーサイド
@@ -283,6 +384,10 @@ interface ProgressState {
 - 合格/不合格を明確に
 - フィードバックを見やすく整形
 - お手本レビューとの比較表示
+- **Xシェアボタン**：
+  - 目立つ位置に配置
+  - Xのロゴアイコン付き
+  - クリックで画像生成とシェア画面へ遷移
 
 ## 9. Cloudflare Workers対応
 
@@ -299,10 +404,23 @@ bucket = "./public"
 [[kv_namespaces]]
 binding = "PROBLEMS"
 id = "your-kv-namespace-id"
+
+[[r2_buckets]]
+binding = "SHARE_IMAGES"
+bucket_name = "review-game-share-images"
+preview_bucket_name = "review-game-share-images-preview"
 ```
 
 ### 9.2 環境変数
 - `LLM_API_KEY`: LLM APIのキー（Cloudflare Workersのシークレットに設定）
+- `R2_PUBLIC_URL`: R2バケットの公開URL（例：https://share.review-game.com）
+- `GAME_URL`: ゲームのベースURL（例：https://review-game.com）
+
+### 9.3 R2バケット設定
+- バケット名：`review-game-share-images`
+- 公開アクセス設定：有効
+- カスタムドメイン設定（オプション）
+- CORS設定：必要に応じて設定
 
 ## 10. 実装の優先順位
 
@@ -327,12 +445,17 @@ id = "your-kv-namespace-id"
 3. アニメーション・トランジション
 4. レスポンシブデザインの最適化
 5. ローディング状態の表示
+6. **Xシェア機能の実装**：
+   - OG画像生成機能
+   - R2への画像アップロード
+   - シェアボタンの実装
+   - X Web Intentとの連携
 
 ### Phase 4: 追加機能（オプション）
 1. ヒント機能
 2. 過去の挑戦履歴
 3. ランキング機能（ローカル）
-4. ソーシャルシェア機能
+4. シェア機能の拡張（他のSNS対応）
 
 ## 11. セキュリティ考慮事項
 
@@ -340,6 +463,11 @@ id = "your-kv-namespace-id"
 - ユーザー入力のサニタイゼーション
 - レート制限（LLM API呼び出し）
 - XSS対策（Reactのデフォルト対策）
+- **R2アクセス制御**：
+  - 画像生成APIのレート制限（スパム対策）
+  - ファイル名のサニタイゼーション
+  - 画像サイズの制限（最大5MB程度）
+  - 不正なパラメータのバリデーション
 
 ## 12. パフォーマンス最適化
 
@@ -347,6 +475,11 @@ id = "your-kv-namespace-id"
 - 問題ファイルの事前ビルド時読み込み（可能であれば）
 - LLM応答のキャッシング（同一レビュー内容の場合）
 - Code Splittingによる初期ロード最適化
+- **R2画像の最適化**：
+  - 同一スコアの画像をキャッシュして再利用
+  - CloudflareのCDN経由で配信
+  - 画像生成の非同期処理
+  - R2のライフサイクルポリシー（古い画像の自動削除）
 
 ## 13. 今後の拡張性
 
@@ -358,7 +491,48 @@ id = "your-kv-namespace-id"
 
 ---
 
-## 付録: サンプルプロンプト（LLM評価用）
+## 付録A: シェア画像のデザイン仕様
+
+### 画像サイズとレイアウト
+- サイズ：1200x630px（X/Twitter OGP推奨サイズ）
+- フォーマット：PNG
+- 背景：言語ごとのグラデーション
+  - JavaScript: 黄色系グラデーション (#F7DF1E → #FFA500)
+  - Python: 青系グラデーション (#3776AB → #FFD43B)
+  - Flutter: 青系グラデーション (#02569B → #13B9FD)
+
+### コンテンツ配置
+1. **中央エリア（スコア）**：
+   - フォントサイズ：120px
+   - フォント：太字
+   - 色：白
+   - テキスト："{score}点"
+   - 位置：中央上部（Y: 200px）
+
+2. **サブテキストエリア**：
+   - フォントサイズ：36px
+   - 色：白（80%透明度）
+   - テキスト："{language} - Level {level}"
+   - 位置：スコアの下（Y: 350px）
+
+3. **タイトルエリア**：
+   - フォントサイズ：48px
+   - 色：白
+   - テキスト："Code Review Game"
+   - 位置：上部（Y: 80px）
+
+4. **CodeRabbitアイコン**：
+   - サイズ：80x80px
+   - 位置：右下（X: 1100px, Y: 530px）
+   - 半透明オーバーレイ（20%白）付き
+
+### 追加装飾
+- 合格（70点以上）の場合：金色のボーダーまたはバッジ追加
+- スコアに応じた星マーク表示（オプション）
+
+---
+
+## 付録B: サンプルプロンプト（LLM評価用）
 
 ```
 あなたは経験豊富なコードレビューアです。新人エンジニアのコードレビューを評価してください。
