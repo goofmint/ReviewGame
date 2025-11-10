@@ -1,87 +1,79 @@
-# ReviewGame
+# Welcome to React Router!
 
-コードレビューのスキルを楽しく学習できるゲーム形式のWebアプリケーション。
+A modern, production-ready template for building full-stack React applications using React Router.
 
-## 🎮 概要
+## Features
 
-様々なプログラミング言語のコードに対してレビューを行い、AI（LLM）による評価を受けて得点を獲得し、レベルアップしていくゲームです。
+- 🚀 Server-side rendering
+- ⚡️ Hot Module Replacement (HMR)
+- 📦 Asset bundling and optimization
+- 🔄 Data loading and mutations
+- 🔒 TypeScript by default
+- 🎉 TailwindCSS for styling
+- 📖 [React Router docs](https://reactrouter.com/)
 
-**対応言語:**
-- JavaScript
-- Python
-- Flutter (Dart)
+## Getting Started
 
-## 🚀 クイックスタート
+### Installation
+
+Install the dependencies:
 
 ```bash
-# 依存関係のインストール
 npm install
+```
 
-# 開発サーバーを起動
+### Development
+
+Start the development server with HMR:
+
+```bash
 npm run dev
 ```
 
-http://localhost:5173 でアプリケーションにアクセスできます。
+Your application will be available at `http://localhost:5173`.
 
-## 📚 ドキュメント
+## Previewing the Production Build
 
-- **[クイックスタート](QUICKSTART.md)** - 5分でCloudflareにデプロイ
-- **[デプロイメントガイド](DEPLOYMENT.md)** - 詳細なデプロイ手順
-- **[設計書](CLAUDE.md)** - プロジェクトの基本設計
-
-## 🛠️ 技術スタック
-
-- **Framework**: Remix
-- **Runtime**: Cloudflare Workers
-- **Hosting**: Cloudflare Pages
-- **Styling**: Tailwind CSS
-- **Language**: TypeScript
-- **AI**: LLM (OpenAI/Anthropic)
-- **Storage**: Cloudflare R2
-
-## 📦 スクリプト
+Preview the production build locally:
 
 ```bash
-npm run dev        # 開発サーバー起動
-npm run build      # プロダクションビルド
-npm run start      # ローカルでプレビュー
-npm run typecheck  # 型チェック
-npm run test       # テスト実行
+npm run preview
 ```
 
-## 🎯 機能
+## Building for Production
 
-- ✅ 言語選択（JavaScript, Python, Flutter）
-- ✅ レベル別の問題
-- ✅ AIによるレビュー評価
-- ✅ スコアリングとフィードバック
-- ✅ 進捗管理（ローカルストレージ）
-- 🔄 シェア機能（実装予定）
+Create a production build:
 
-## 📝 新しい問題の追加
-
-`problems/`ディレクトリにMarkdownファイルを追加するだけで、自動的に問題が追加されます。
-
-```markdown
----
-title: "レベル1: 基本的なバグ発見"
-difficulty: 1
-language: javascript
----
-
-# 要件
-...
-
-# コード
-...
+```bash
+npm run build
 ```
 
-## 🚀 デプロイ
+## Deployment
 
-GitHub Actionsで自動デプロイが設定されています。
+Deployment is done using the Wrangler CLI.
 
-詳細は [QUICKSTART.md](QUICKSTART.md) または [DEPLOYMENT.md](DEPLOYMENT.md) を参照してください。
+To build and deploy directly to production:
 
-## 📄 ライセンス
+```sh
+npm run deploy
+```
 
-MIT
+To deploy a preview URL:
+
+```sh
+npx wrangler versions upload
+```
+
+You can then promote a version to production after verification or roll it out progressively.
+
+```sh
+npx wrangler versions deploy
+```
+
+## Styling
+
+This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
+
+---
+
+Built with ❤️ using React Router.

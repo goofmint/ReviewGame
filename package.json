@@ -1,50 +1,33 @@
 {
-  "name": "review-game",
-  "private": true,
-  "sideEffects": false,
-  "type": "module",
-  "scripts": {
-    "prebuild": "tsx scripts/build-problems.ts",
-    "build": "remix vite:build",
-    "dev": "tsx scripts/build-problems.ts && remix vite:dev",
-    "start": "wrangler pages dev ./build/client",
-    "typecheck": "tsc",
-    "test": "vitest",
-    "test:coverage": "vitest --coverage"
-  },
-  "dependencies": {
-    "@iconify/react": "^5.0.2",
-    "@remix-run/cloudflare": "^2.15.1",
-    "@remix-run/cloudflare-pages": "^2.15.1",
-    "@remix-run/react": "^2.15.1",
-    "isbot": "^5.1.21",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250110.0",
-    "@remix-run/dev": "^2.15.1",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.1.0",
-    "@testing-library/user-event": "^14.5.2",
-    "@types/node": "^22.10.2",
-    "@types/react": "^18.3.18",
-    "@types/react-dom": "^18.3.5",
-    "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/coverage-v8": "^2.1.8",
-    "autoprefixer": "^10.4.20",
-    "gray-matter": "^4.0.3",
-    "happy-dom": "^15.11.7",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vite": "^5.4.11",
-    "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^2.1.8",
-    "wrangler": "^3.99.0"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  }
+	"name": "review-game",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "react-router build",
+		"cf-typegen": "wrangler types",
+		"deploy": "npm run build && wrangler deploy",
+		"dev": "react-router dev",
+		"postinstall": "npm run cf-typegen",
+		"preview": "npm run build && vite preview",
+		"typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
+	},
+	"dependencies": {
+		"isbot": "^5.1.31",
+		"react": "^19.1.1",
+		"react-dom": "^19.1.1",
+		"react-router": "^7.9.2"
+	},
+	"devDependencies": {
+		"@cloudflare/vite-plugin": "^1.13.5",
+		"@react-router/dev": "^7.9.2",
+		"@tailwindcss/vite": "^4.1.13",
+		"@types/node": "^22",
+		"@types/react": "^19.1.13",
+		"@types/react-dom": "^19.1.9",
+		"tailwindcss": "^4.1.13",
+		"typescript": "^5.9.2",
+		"vite": "^7.1.7",
+		"vite-tsconfig-paths": "^5.1.4",
+		"wrangler": "^4.46.0"
+	}
 }

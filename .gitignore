@@ -1,23 +1,18 @@
-node_modules
-
-/.cache
-/build
-.env
-.wrangler
-
-# Test coverage
-coverage
-
-# OS
 .DS_Store
-Thumbs.db
+.env
+/node_modules/
+*.tsbuildinfo
 
-# IDE
-.idea
-.vscode
-*.swp
-*.swo
-*~
+# React Router
+/.react-router/
+/build/
 
-# Generated files
-app/data/problems.ts
+# Cloudflare
+.mf
+.wrangler
+.dev.vars*
+worker-configuration.d.ts
+
+
+!.dev.vars.example
+!.env.example
