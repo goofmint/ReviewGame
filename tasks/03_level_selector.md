@@ -1,11 +1,12 @@
 # タスク03: レベル選択画面
 
 ## 概要
-選択した言語の学習レベルを選択するUIを実装する。Phase 1ではレベル1のみ有効。
+選択した言語の学習レベルを選択するUIを実装する。Phase 1ではレベル1のみ有効。レベル数は動的に検出され、ファイル追加だけで拡張可能。
 
 ## 目的
-- レベル1を選択可能にする
-- レベル2、3は実装せず、グレーアウト表示（将来の拡張を示唆）
+- 利用可能なレベルを動的に表示
+- Phase 1ではレベル1のみ実装（将来的には自動的に増加）
+- レベルの追加はMarkdownファイルを追加するだけ
 - 選択後、問題表示画面に遷移
 
 ## 画面構成
@@ -23,15 +24,9 @@
 │  │  [開始]       │                      │
 │  └──────────────┘                      │
 │                                         │
-│  ┌──────────────┐ (グレーアウト)       │
-│  │  Level 2  🔒 │                      │
-│  │  ⭐⭐        │                      │
-│  └──────────────┘                      │
-│                                         │
-│  ┌──────────────┐ (グレーアウト)       │
-│  │  Level 3  🔒 │                      │
-│  │  ⭐⭐⭐      │                      │
-│  └──────────────┘                      │
+│  （Phase 1ではレベル1のみ）              │
+│  （将来的にlevel2.md, level3.md等を     │
+│   追加すると自動的に表示される）         │
 └─────────────────────────────────────────┘
 ```
 
@@ -42,11 +37,18 @@
 
 interface LevelSelectorPageProps {
   params: {
-    lang: Language;
+    lang: string;
   };
 }
 
+interface LoaderData {
+  language: string;
+  availableLevels: number[]; // 利用可能なレベルのリスト
+  problems: Record<number, Problem>; // レベルごとの問題情報
+}
+
 // loader で言語パラメータを検証
+// problems データから利用可能なレベルを取得
 // 不正な言語の場合は404またはリダイレクト
 // レベル選択画面を表示
 ```
@@ -56,31 +58,31 @@ interface LevelSelectorPageProps {
 ```typescript
 // app/components/LevelSelector.tsx
 
-type Level = 1 | 2 | 3;
-
 interface LevelSelectorProps {
-  language: Language;
-  onSelectLevel?: (level: Level) => void;
+  language: string;
+  availableLevels: number[]; // 動的に取得されたレベルリスト
+  problems: Record<number, Problem>; // レベルごとの問題情報
+  onSelectLevel?: (level: number) => void;
 }
 
 interface LevelInfo {
-  level: Level;
+  level: number;
   title: string;
-  difficulty: number; // 星の数 (1-3)
+  difficulty: number; // 星の数（問題のdifficultyフィールドから取得）
   description: string;
   unlocked: boolean;
 }
 
-// レベル1-3のカードを縦に表示
-// レベル1のみクリック可能
-// レベル2、3はロック表示
+// availableLevels を元に動的にカードを生成
+// Phase 1 ではレベル1のみ表示
+// 将来的にはレベル数が自動的に増える
 ```
 
 ```typescript
 // app/components/LevelCard.tsx
 
 interface LevelCardProps {
-  level: Level;
+  level: number;
   title: string;
   difficulty: number;
   description: string;
@@ -94,25 +96,30 @@ interface LevelCardProps {
 // スコア情報の表示（達成済みの場合）
 ```
 
-## データ定義
+## データ取得
 
 ```typescript
-// app/data/levels.ts
+// app/data/problems.ts から動的に取得
 
-interface LevelConfig {
-  level: Level;
-  title: string;
-  difficulty: number;
-  description: string;
+import { problems } from '~/data/problems';
+
+// 指定言語の利用可能なレベルを取得
+export function getAvailableLevels(language: string): number[] {
+  const langProblems = problems[language];
+  if (!langProblems) return [];
+
+  return Object.keys(langProblems)
+    .map(Number)
+    .sort((a, b) => a - b);
 }
 
-// Phase 1 では Level 1 の情報のみ定義
-// {
-//   level: 1,
-//   title: "基本的なバグ発見",
-//   difficulty: 1,
-//   description: "コードの基本的な問題を見つけよう"
-// }
+// 指定言語の全問題を取得
+export function getLanguageProblems(language: string): Record<number, Problem> {
+  return problems[language] || {};
+}
+
+// Phase 1 では JavaScript の level1.md のみ存在
+// 将来的に level2.md, level3.md を追加すると自動的に検出される
 ```
 
 ## ナビゲーション
@@ -150,9 +157,9 @@ interface ProgressState {
 - 中央寄せ配置
 
 ### カードデザイン
-- レベル1: 明るい背景、アクティブな状態
-- レベル2、3: グレーアウト、ロックアイコン表示
-- 難易度を星の数で表現
+- アンロック済みレベル: 明るい背景、アクティブな状態
+- ロック中レベル: グレーアウト、ロックアイコン表示
+- 難易度を星の数で表現（Problem の difficulty フィールドから取得）
 
 ### カラーテーマ
 - 言語選択で選んだ言語のアクセントカラーを使用
@@ -161,15 +168,18 @@ interface ProgressState {
 ## 実装の注意点
 
 1. **URL検証**: 無効な言語パラメータの場合は404ページへ
-2. **Phase 1の制約**: レベル2、3のUIは表示するが、クリック不可
-3. **将来の拡張性**: ProgressState の型定義を用意し、実装は後回し
-4. **戻るナビゲーション**: 直感的な戻るボタンの配置
+2. **動的レベル検出**: problems データから利用可能なレベルを取得
+3. **Phase 1の制約**: レベル1のみ表示（問題ファイルがレベル1のみのため）
+4. **拡張性**: 新しいレベルは Markdown ファイルを追加するだけで自動認識
+5. **将来の拡張性**: ProgressState の型定義を用意し、実装は後回し
+6. **戻るナビゲーション**: 直感的な戻るボタンの配置
 
 ## 検証項目
 
 - [ ] URLパラメータから正しく言語を取得
-- [ ] レベル1のカードがアクティブ状態で表示
-- [ ] レベル2、3がグレーアウト表示
+- [ ] problems データから利用可能なレベルを動的に取得
+- [ ] Phase 1 ではレベル1のカードのみ表示
 - [ ] レベル1をクリックで問題画面に遷移
 - [ ] 戻るボタンで言語選択画面に戻る
 - [ ] 不正な言語パラメータで適切にエラー処理
+- [ ] 将来的に level2.md を追加した場合、自動的にレベル2が表示される

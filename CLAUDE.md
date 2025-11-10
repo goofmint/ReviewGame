@@ -14,7 +14,8 @@
 - 新しい言語の追加はMarkdownファイルを追加するだけで対応可能
 
 ### 2.2 レベル選択画面
-- レベル1〜3まで用意
+- 各言語ごとに複数のレベルを用意（Phase 1ではレベル1のみ）
+- レベル数は動的に検出（Markdownファイルを追加するだけで自動認識）
 - 各レベルの難易度表示
 - レベルのロック/アンロック状態の管理（70点以上で次レベルがアンロック）
 
@@ -293,7 +294,7 @@ fs.writeFileSync(outputPath, output, 'utf8');
 ```typescript
 interface Problem {
   title: string;
-  difficulty: 1 | 2 | 3;
+  difficulty: number; // レベル番号（拡張可能）
   language: string; // 拡張可能にするため string 型
   requirements: string;
   code: string;
@@ -341,8 +342,8 @@ interface ProgressState {
 ```typescript
 interface ShareImageData {
   score: number;
-  language: 'javascript' | 'python' | 'flutter';
-  level: 1 | 2 | 3;
+  language: string;
+  level: number;
   timestamp: number;
 }
 
@@ -594,11 +595,14 @@ preview_bucket_name = "review-game-share-images-preview"
 - **新しい言語の追加が容易**：
   - `problems/{language}/` ディレクトリを追加
   - ビルドスクリプトで自動的に検出・変換
+  - コード変更不要
 - **レベル数の拡張が容易**：
-  - Markdownファイルを追加するだけ
-  - 型定義を更新すれば型安全性も維持
+  - `problems/{language}/level{N}.md` ファイルを追加するだけ
+  - ビルドスクリプトで自動的に検出
+  - レベル番号は連番でなくてもOK（level1, level5, level10など）
+  - コード変更不要
 - **問題数が大幅に増えた場合の対応**：
-  - 現状：9問（軽量、バンドル可能）
+  - 現状：言語×レベル数（軽量、バンドル可能）
   - 将来的に100問以上になる場合：
     - Cloudflare KVへの移行を検討
     - または問題を動的にfetchする形式に変更

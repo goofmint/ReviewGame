@@ -100,7 +100,7 @@ interface CodeDisplayProps {
 
 interface Problem {
   title: string;
-  difficulty: 1 | 2 | 3;
+  difficulty: number; // レベル番号（拡張可能）
   language: string; // 拡張可能にするため string 型
   requirements: string;
   code: string;
