@@ -53,6 +53,16 @@ export default function ProblemPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
 
+  const focusTextareaEnd = () => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.setSelectionRange(
+        textareaRef.current.value.length,
+        textareaRef.current.value.length
+      );
+    }
+  };
+
   const handleLineClick = (lineNumber: number) => {
     const template = `コードの${lineNumber}行目: `;
     setReview((prev) => {
@@ -62,15 +72,7 @@ export default function ProblemPage() {
       return template;
     });
 
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(
-          textareaRef.current.value.length,
-          textareaRef.current.value.length
-        );
-      }
-    }, 0);
+    setTimeout(() => focusTextareaEnd(), 0);
   };
 
   const handleRequirementClick = (text: string) => {
@@ -84,15 +86,7 @@ export default function ProblemPage() {
       return template;
     });
 
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(
-          textareaRef.current.value.length,
-          textareaRef.current.value.length
-        );
-      }
-    }, 0);
+    setTimeout(() => focusTextareaEnd(), 0);
   };
 
   const handleSubmit = () => {

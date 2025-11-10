@@ -1,6 +1,6 @@
 import type { ProgressState } from "~/types/problem";
 
-const PROGRESS_KEY = "reviewGameProgress";
+export const PROGRESS_KEY = "reviewGameProgress";
 
 export function getProgress(): ProgressState {
   if (typeof window === "undefined") return {};

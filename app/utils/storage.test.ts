@@ -6,6 +6,7 @@ import {
   updateScore,
   isLevelUnlocked,
   getBestScore,
+  PROGRESS_KEY,
 } from "./storage";
 import type { ProgressState } from "~/types/problem";
 
@@ -26,7 +27,7 @@ describe("storage", () => {
           1: { unlocked: true, bestScore: 85, attempts: 1 },
         },
       };
-      localStorage.setItem("reviewGameProgress", JSON.stringify(testProgress));
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(testProgress));
 
       const progress = getProgress();
       expect(progress).toEqual(testProgress);
@@ -43,7 +44,7 @@ describe("storage", () => {
 
       saveProgress(testProgress);
 
-      const stored = localStorage.getItem("reviewGameProgress");
+      const stored = localStorage.getItem(PROGRESS_KEY);
       expect(stored).not.toBeNull();
       expect(JSON.parse(stored!)).toEqual(testProgress);
     });

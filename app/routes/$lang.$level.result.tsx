@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
-import { useLoaderData, useLocation } from "@remix-run/react";
-import { json, redirect } from "@remix-run/cloudflare";
+import { useLoaderData, useLocation, useNavigate } from "@remix-run/react";
+import { json } from "@remix-run/cloudflare";
+import { useEffect } from "react";
 import { Header } from "~/components/Header";
 import { ResultView } from "~/components/ResultView";
 
@@ -36,11 +37,18 @@ export async function loader({ params }: LoaderFunctionArgs) {
 export default function ResultPage() {
   const { language, level } = useLoaderData<typeof loader>();
   const location = useLocation();
+  const navigate = useNavigate();
   const state = location.state as LocationState | null;
 
   // If no state, redirect back to problem page
+  useEffect(() => {
+    if (!state) {
+      navigate(`/${language}/${level}`, { replace: true });
+    }
+  }, [state, language, level, navigate]);
+
   if (!state) {
-    return redirect(`/${language}/${level}`);
+    return null;
   }
 
   return (

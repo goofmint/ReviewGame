@@ -53,20 +53,26 @@ function buildProblems(): void {
       const { data, content } = matter(fileContent);
 
       const sections = content.split(/^# /m).filter(Boolean);
-      const requirements =
-        sections
-          .find((s) => s.startsWith("要件"))
-          ?.replace("要件\n\n", "")
-          .trim() ?? "";
+
+      // Helper function to remove heading line and trim
+      const removeHeading = (section: string | undefined): string => {
+        if (!section) return "";
+        const lines = section.split(/\r?\n/);
+        const withoutHeading = lines.slice(1).join("\n").trim();
+        return withoutHeading || "";
+      };
+
+      const requirements = removeHeading(
+        sections.find((s) => s.startsWith("要件"))
+      );
 
       const codeSection = sections.find((s) => s.startsWith("コード"));
       const codeMatch = codeSection?.match(/```[\s\S]*?\n([\s\S]*?)```/);
       const code = codeMatch?.[1]?.trim() ?? "";
 
-      const evaluationCriteria = sections
-        .find((s) => s.startsWith("評価基準"))
-        ?.replace("評価基準\n\n", "")
-        .trim();
+      const evaluationCriteria = removeHeading(
+        sections.find((s) => s.startsWith("評価基準"))
+      );
 
       allProblems[lang][level] = {
         title: data.title as string,
