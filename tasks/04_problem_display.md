@@ -101,10 +101,10 @@ interface CodeDisplayProps {
 interface Problem {
   title: string;
   difficulty: 1 | 2 | 3;
-  language: Language;
+  language: string; // 拡張可能にするため string 型
   requirements: string;
   code: string;
-  modelReview: string;
+  evaluationCriteria?: string; // LLM評価の参考情報（オプション）
 }
 
 // Phase 1 では静的データとして定義
@@ -127,20 +127,15 @@ const JAVASCRIPT_LEVEL_1: Problem = {
   }
   return true;
 }`,
-  modelReview: `1. **上限チェックの欠如**: コードの2-4行目で下限（0以上）のみチェックしていますが、上限（150以下）のチェックが実装されていません。
-
-2. **型チェックの欠如**: 要件では「整数」と指定されていますが、実装では数値型かどうか、整数かどうかのチェックがありません。
-
-3. **エラーメッセージの不整合**: 上限チェックがないため、上限を超えた場合のエラーメッセージも用意されていません。
-
-4. **改善提案**:
-   - \`Number.isInteger(age)\` で整数チェック
-   - \`age <= 150\` で上限チェック
-   - それぞれに適切なエラーメッセージを設定`
+  evaluationCriteria: `LLMがユーザーのレビューを評価する際の基準：
+- 上限チェック（150以下）の欠如を指摘できているか
+- 型チェック（数値型、整数）の欠如を指摘できているか
+- 具体的な改善提案を提示できているか
+- エラーハンドリングの不足を指摘できているか`
 };
 
 // 問題データを取得する関数
-export function getProblem(language: Language, level: number): Problem | null;
+export function getProblem(language: string, level: number): Problem | null;
 ```
 
 ## スタイリング

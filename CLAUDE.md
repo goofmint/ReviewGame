@@ -8,9 +8,10 @@
 ## 2. 機能要件
 
 ### 2.1 言語選択画面
-- 対応言語：JavaScript、Flutter (Dart)、Python
+- 対応言語：JavaScript、Flutter (Dart)、Python（今後増える想定）
 - 初期表示で言語を選択
 - 選択後、レベル選択画面へ遷移
+- 新しい言語の追加はMarkdownファイルを追加するだけで対応可能
 
 ### 2.2 レベル選択画面
 - レベル1〜3まで用意
@@ -25,17 +26,17 @@
 
 ### 2.4 レビュー評価機能
 - ユーザーが入力したレビュー内容をLLMに送信
-- あらかじめ用意された「お手本レビュー」との整合性をLLMがチェック
+- LLMがコードと要件を分析し、ユーザーのレビューを評価
 - LLMが以下の観点で評価：
-  - 指摘の正確性（お手本との一致度）
+  - 指摘の正確性（実際の問題点を正しく指摘できているか）
   - 指摘の網羅性（重要なポイントを見逃していないか）
-  - 説明の分かりやすさ
+  - 説明の分かりやすさ（建設的で具体的か）
 - 0〜100点でスコアリング
 
 ### 2.5 結果表示画面
 - 獲得スコアの表示
 - LLMによるフィードバックコメント
-- お手本レビューの表示
+- 良かった点（strengths）と改善点（improvements）のリスト
 - 70点以上で次のレベルがアンロック
 - 「もう一度挑戦」「次のレベルへ」「言語選択に戻る」ボタン
 
@@ -82,7 +83,7 @@
   - プロンプトエンジニアリングで評価精度を確保
 
 ### 3.4 コンテンツ管理
-- **Markdown**: 問題・要件・お手本レビューを記述
+- **Markdown**: 問題・要件・評価基準を記述
   - ソースファイル：`problems/`ディレクトリに配置
   - ビルド時処理：gray-matterでMarkdownをパース
   - 出力：TypeScriptファイルとしてバンドル
@@ -90,6 +91,7 @@
   - ビルドスクリプト（`scripts/build-problems.ts`）で自動変換
   - `app/data/problems.ts`を生成（静的インポート可能）
   - DBやKV不要、ファイルシステムアクセスなし
+  - 新しい言語は自動検出（problems/内のディレクトリを走査）
 
 ### 3.5 画像ストレージ
 - **Cloudflare R2**: シェア画像の保存
@@ -201,24 +203,19 @@ function validateAge(age) {
 }
 \`\`\`
 
-# お手本レビュー
+# 評価基準
 
-1. **上限チェックの欠如**: コードの2-4行目で下限（0以上）のみチェックしていますが、上限（150以下）のチェックが実装されていません。
-
-2. **型チェックの欠如**: 要件では「整数」と指定されていますが、実装では数値型かどうか、整数かどうかのチェックがありません。
-
-3. **エラーメッセージの不整合**: 上限チェックがないため、上限を超えた場合のエラーメッセージも用意されていません。
-
-4. **改善提案**:
-   - `Number.isInteger(age)` で整数チェック
-   - `age <= 150` で上限チェック
-   - それぞれに適切なエラーメッセージを設定
-\`\`\`
+LLMがユーザーのレビューを評価する際の基準：
+- 上限チェック（150以下）の欠如を指摘できているか
+- 型チェック（数値型、整数）の欠如を指摘できているか
+- 具体的な改善提案を提示できているか
+- エラーハンドリングの不足を指摘できているか
 ```
 
 ### 4.3 ビルドプロセス
 
 ビルド時に`scripts/build-problems.ts`を実行し、Markdownファイルを読み込んでTypeScriptファイルに変換します。
+言語は動的に検出するため、新しい言語を追加する際はMarkdownファイルを配置するだけで自動的に認識されます。
 
 ```typescript
 // scripts/build-problems.ts の例
@@ -227,15 +224,26 @@ import path from 'path';
 import matter from 'gray-matter';
 
 const problemsDir = path.join(process.cwd(), 'problems');
-const languages = ['javascript', 'python', 'flutter'];
-const levels = [1, 2, 3];
+
+// 言語を動的に検出（problems/内のディレクトリを走査）
+const languages = fs.readdirSync(problemsDir, { withFileTypes: true })
+  .filter(dirent => dirent.isDirectory())
+  .map(dirent => dirent.name);
 
 const allProblems = {};
 
 languages.forEach(lang => {
   allProblems[lang] = {};
-  levels.forEach(level => {
-    const filePath = path.join(problemsDir, lang, `level${level}.md`);
+
+  // レベルファイルを動的に検出
+  const langDir = path.join(problemsDir, lang);
+  const levelFiles = fs.readdirSync(langDir).filter(f => f.endsWith('.md'));
+
+  levelFiles.forEach(file => {
+    const level = parseInt(file.match(/level(\d+)\.md/)?.[1] || '0');
+    if (level === 0) return;
+
+    const filePath = path.join(langDir, file);
     const fileContent = fs.readFileSync(filePath, 'utf8');
     const { data, content } = matter(fileContent);
 
@@ -244,7 +252,7 @@ languages.forEach(lang => {
     const requirements = sections.find(s => s.startsWith('要件'))?.replace('要件\n\n', '').trim();
     const codeSection = sections.find(s => s.startsWith('コード'));
     const code = codeSection?.match(/```[\s\S]*?\n([\s\S]*?)```/)?.[1]?.trim();
-    const modelReview = sections.find(s => s.startsWith('お手本レビュー'))?.replace('お手本レビュー\n\n', '').trim();
+    const evaluationCriteria = sections.find(s => s.startsWith('評価基準'))?.replace('評価基準\n\n', '').trim();
 
     allProblems[lang][level] = {
       title: data.title,
@@ -252,7 +260,7 @@ languages.forEach(lang => {
       language: data.language,
       requirements,
       code,
-      modelReview
+      evaluationCriteria
     };
   });
 });
@@ -261,6 +269,7 @@ languages.forEach(lang => {
 const outputPath = path.join(process.cwd(), 'app/data/problems.ts');
 const output = `// このファイルは自動生成されます。直接編集しないでください。
 export const problems = ${JSON.stringify(allProblems, null, 2)} as const;
+export const availableLanguages = ${JSON.stringify(languages)} as const;
 `;
 
 fs.writeFileSync(outputPath, output, 'utf8');
@@ -285,10 +294,10 @@ fs.writeFileSync(outputPath, output, 'utf8');
 interface Problem {
   title: string;
   difficulty: 1 | 2 | 3;
-  language: 'javascript' | 'python' | 'flutter';
+  language: string; // 拡張可能にするため string 型
   requirements: string;
   code: string;
-  modelReview: string;
+  evaluationCriteria?: string; // LLM評価の参考情報（オプション）
 }
 ```
 
@@ -373,19 +382,24 @@ interface ShareResult {
 2. `/api/evaluate` エンドポイントにPOST
 3. サーバー側でLLMにプロンプトを送信
    ```
-   あなたはコードレビューの評価者です。
-   以下のユーザーレビューと模範レビューを比較し、評価してください。
+   あなたは経験豊富なコードレビューアです。新人エンジニアのコードレビューを評価してください。
 
-   【模範レビュー】
-   {modelReview}
+   【問題の要件】
+   {requirements}
 
-   【ユーザーレビュー】
+   【レビュー対象コード】
+   {code}
+
+   【新人エンジニアのレビュー】
    {userReview}
 
-   【評価基準】
-   - 指摘の正確性: 模範レビューと同様の問題点を指摘できているか
-   - 網羅性: 重要なポイントを見逃していないか
-   - 説明の明確性: 分かりやすく説明できているか
+   【評価タスク】
+   上記のコードと要件を分析し、新人エンジニアのレビューを以下の観点で評価してください：
+
+   1. 正確性（40点）: コードの実際の問題点を正しく指摘できているか
+   2. 網羅性（30点）: 重要な問題点を見逃していないか
+   3. 説明力（20点）: 指摘内容が分かりやすく、建設的に説明されているか
+   4. 実用性（10点）: 具体的な改善提案や代替案を示せているか
 
    JSON形式で以下を返してください:
    {
@@ -473,8 +487,9 @@ interface ShareResult {
 ### 8.4 結果画面
 - スコアを大きく表示
 - 合格/不合格を明確に
-- フィードバックを見やすく整形
-- お手本レビューとの比較表示
+- LLMによるフィードバックを見やすく整形
+- 良かった点（strengths）をリスト表示
+- 改善点（improvements）をリスト表示
 - **Xシェアボタン**：
   - 目立つ位置に配置
   - Xのロゴアイコン付き
@@ -519,7 +534,7 @@ preview_bucket_name = "review-game-share-images-preview"
 3. レベル選択画面（レベル1のみ）
 4. 問題表示画面（JavaScript Level 1のみ）
 5. レビュー入力機能
-6. 静的な評価（お手本を表示するのみ）
+6. 静的な結果表示（LLM評価なし、入力内容の確認のみ）
 
 ### Phase 2: コア機能
 1. LLM連携によるレビュー評価
@@ -646,19 +661,27 @@ preview_bucket_name = "review-game-share-images-preview"
 【レビュー対象コード】
 {code}
 
-【模範的なレビュー】
-{modelReview}
-
 【新人エンジニアのレビュー】
 {userReview}
 
 【評価タスク】
-新人エンジニアのレビューを以下の観点で評価してください：
+上記のコードと要件を分析し、新人エンジニアのレビューを以下の観点で評価してください：
 
-1. 正確性（40点）: 模範レビューで指摘されている重要な問題点を正しく指摘できているか
-2. 網羅性（30点）: 見逃している重要な指摘がないか
+1. 正確性（40点）: コードの実際の問題点を正しく指摘できているか
+   - 要件を満たしていない箇所を見つけられているか
+   - バグや潜在的な問題を指摘できているか
+
+2. 網羅性（30点）: 重要な問題点を見逃していないか
+   - エラーハンドリング、型チェック、境界値チェックなど
+   - 要件の各項目に対する検証
+
 3. 説明力（20点）: 指摘内容が分かりやすく、建設的に説明されているか
-4. 追加価値（10点）: 模範レビューにはない有益な指摘があるか
+   - 具体的な行番号や箇所を示しているか
+   - なぜ問題なのかを説明しているか
+
+4. 実用性（10点）: 具体的な改善提案や代替案を示せているか
+   - 修正方法を提示しているか
+   - コード例を示しているか
 
 【出力形式】
 以下のJSON形式で評価結果を返してください：
@@ -672,7 +695,7 @@ preview_bucket_name = "review-game-share-images-preview"
   ],
   "improvements": [
     "型チェックの重要性についてより詳しく説明できるとよいでしょう",
-    "セキュリティ観点からの指摘も加えられるとさらに良いです"
+    "Number.isInteger()の使用例を示すとさらに良いです"
   ]
 }
 ```

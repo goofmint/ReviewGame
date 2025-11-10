@@ -1,31 +1,28 @@
-# タスク06: 静的な評価（お手本表示）
+# タスク06: 静的な結果表示
 
 ## 概要
-Phase 1では、LLM評価を実装せず、ユーザーのレビュー送信後にお手本レビューを表示する静的な結果画面を実装する。
+Phase 1では、LLM評価を実装せず、ユーザーのレビュー送信後に入力内容を確認する静的な結果画面を実装する。
 
 ## 目的
-- ユーザーが入力したレビューを表示
-- お手本レビューを表示して比較可能にする
+- ユーザーが入力したレビューを確認表示
+- 簡易メッセージで送信完了を通知
 - 次のアクション（再挑戦、言語選択に戻る）を提供
 
 ## 画面構成
 
 ```
 ┌─────────────────────────────────────────┐
-│  レビュー結果                           │
+│  レビュー送信完了                        │
 │                                         │
-│  【あなたのレビュー】                    │
+│  ✓ レビューを送信しました               │
+│                                         │
+│  【送信したレビュー】                    │
 │  ┌───────────────────────────────────┐ │
 │  │ [ユーザーが入力したレビュー内容]    │ │
 │  │                                   │ │
 │  └───────────────────────────────────┘ │
 │                                         │
-│  【お手本レビュー】                      │
-│  ┌───────────────────────────────────┐ │
-│  │ 1. **上限チェックの欠如**: ...     │ │
-│  │ 2. **型チェックの欠如**: ...       │ │
-│  │ 3. **改善提案**: ...               │ │
-│  └───────────────────────────────────┘ │
+│  ※ Phase 2でLLM評価機能を実装予定      │
 │                                         │
 │  [もう一度挑戦]  [言語選択に戻る]       │
 └─────────────────────────────────────────┘
@@ -38,20 +35,19 @@ Phase 1では、LLM評価を実装せず、ユーザーのレビュー送信後�
 
 interface ResultPageProps {
   params: {
-    lang: Language;
+    lang: string;
     level: string;
   };
 }
 
 interface LoaderData {
   userReview: string;
-  modelReview: string;
-  problem: Problem;
+  language: string;
+  level: number;
 }
 
 // action から送信されたレビューを受け取る
-// お手本レビューを取得
-// 両方を表示する結果画面を返す
+// Phase 1 では入力内容の確認表示のみ
 ```
 
 ## コンポーネント構成
@@ -61,35 +57,29 @@ interface LoaderData {
 
 interface ResultViewProps {
   userReview: string;
-  modelReview: string;
-  language: Language;
+  language: string;
   level: number;
   onRetry: () => void;
   onBackToLanguages: () => void;
 }
 
 // 結果表示のメインコンテナ
-// ユーザーレビューとお手本レビューを並べて表示
+// ユーザーレビューを表示
+// 送信完了メッセージを表示
 // アクションボタンを配置
 ```
 
 ```typescript
-// app/components/ReviewComparison.tsx
+// app/components/ReviewDisplay.tsx
 
-interface ReviewComparisonProps {
-  userReview: string;
-  modelReview: string;
-}
-
-interface ReviewSection {
-  title: string;
+interface ReviewDisplayProps {
   content: string;
-  type: 'user' | 'model';
+  title: string;
 }
 
-// 2つのレビューを比較表示
-// 読みやすいフォーマット
-// お手本レビューはMarkdown形式で表示
+// レビュー内容を表示するコンポーネント
+// プレーンテキスト表示
+// 改行を保持
 ```
 
 ## データフロー
@@ -100,17 +90,16 @@ interface ReviewSection {
 // 1. タスク05のフォームで送信
 interface ReviewSubmission {
   content: string;
-  language: Language;
+  language: string;
   level: number;
 }
 
 // 2. action で受信
-// Phase 1 では評価せず、そのまま結果画面へ
+// Phase 1 では評価せず、そのまま結果画面へリダイレクト
 
 // 3. 結果画面で表示
 interface ResultData {
   userReview: string;
-  modelReview: string;
 }
 ```
 
@@ -118,18 +107,25 @@ interface ResultData {
 
 ### レイアウト
 - 単一カラム、中央寄せ
-- ユーザーレビューとお手本レビューを縦に配置
+- 送信完了アイコンとメッセージ
+- ユーザーレビューを表示
 - 十分な余白で読みやすく
 
+### 成功メッセージ
+- チェックマークアイコン（✓）
+- 緑色のテキスト
+- 大きめのフォントサイズ
+
 ### レビューボックス
-- ユーザーレビュー: 薄い青背景
-- お手本レビュー: 薄い緑背景
+- 白背景のカード
 - 境界線と角丸
 - 内部パディング: 24px
+- 改行を保持したプレーンテキスト表示
 
-### テキスト表示
-- ユーザーレビュー: プレーンテキスト、改行を保持
-- お手本レビュー: Markdownレンダリング（太字、リスト対応）
+### 注意書き
+- 小さめのフォントサイズ
+- グレーのテキスト
+- 「Phase 2で評価機能実装予定」を表示
 
 ### アクションボタン
 - 2つのボタンを横並び配置
@@ -146,28 +142,12 @@ interface ResultData {
 // → / に遷移（トップページ）
 ```
 
-## Markdownレンダリング
-
-```typescript
-// app/utils/markdown.ts
-
-interface MarkdownRenderOptions {
-  allowedTags?: string[];
-  sanitize?: boolean;
-}
-
-// お手本レビューをMarkdownからHTMLに変換
-// サニタイゼーション処理
-// 安全なタグのみ許可（<strong>, <em>, <ul>, <li>, <code> など）
-export function renderMarkdown(markdown: string): string;
-```
-
 ## 実装の注意点
 
 1. **Phase 1の簡略化**: スコアリングなし、LLM評価なし
-2. **比較の視認性**: ユーザーレビューとお手本を明確に区別
-3. **Markdown処理**: XSS対策のためサニタイゼーション必須
-4. **状態のリセット**: 「もう一度挑戦」で入力内容をクリア
+2. **シンプルな表示**: 入力内容の確認のみ
+3. **状態のリセット**: 「もう一度挑戦」で入力内容をクリア
+4. **将来の拡張**: Phase 2でEvaluationResultを表示する準備
 
 ## Phase 2への準備
 
@@ -189,8 +169,8 @@ interface EvaluationResult {
 ## 検証項目
 
 - [ ] ユーザーが入力したレビューが正しく表示される
-- [ ] お手本レビューがフォーマットされて表示される
-- [ ] お手本のMarkdownが正しくレンダリングされる
+- [ ] 送信完了メッセージが表示される
+- [ ] 改行が保持されて表示される
 - [ ] 「もう一度挑戦」ボタンで問題画面に戻る
 - [ ] 「言語選択に戻る」ボタンでトップページに戻る
 - [ ] モバイル表示でレイアウトが崩れない

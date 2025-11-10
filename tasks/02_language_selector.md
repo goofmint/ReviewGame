@@ -4,7 +4,8 @@
 アプリケーションの最初の画面として、学習したいプログラミング言語を選択するUIを実装する。
 
 ## 目的
-- JavaScript、Python、Flutterの3言語から選択可能にする
+- JavaScript、Python、Flutterの3言語から選択可能にする（Phase 1）
+- 将来的に言語を追加できる拡張性のある設計
 - 視覚的に分かりやすいカード形式のUIを提供
 - 選択後、該当言語のレベル選択画面に遷移
 
@@ -47,6 +48,8 @@ interface LanguageCardProps {
 ```typescript
 // app/components/LanguageSelector.tsx
 
+// Phase 1 では3言語のみ定義
+// 将来的には string 型に変更し、動的に言語を追加可能にする
 type Language = 'javascript' | 'python' | 'flutter';
 
 interface LanguageSelectorProps {
@@ -96,8 +99,9 @@ interface LanguageConfig {
   description: string;
 }
 
-// JavaScript、Python、Flutter の設定を定義
+// Phase 1: JavaScript、Python、Flutter の設定を定義
 // 各言語のカラーテーマ、アイコン、説明文を含む
+// 将来的には problems.ts から availableLanguages を読み込み動的に生成可能
 ```
 
 ## スタイリング
@@ -136,6 +140,7 @@ interface LanguageConfig {
 2. **レスポンシブ**: モバイルでは縦積みレイアウト（1カラム）
 3. **パフォーマンス**: 画像の代わりに絵文字またはSVGアイコンを使用
 4. **SEO**: メタタグで適切なページタイトルと説明を設定
+5. **拡張性**: 将来的に新しい言語を追加しやすい設計を考慮
 
 ## 検証項目
 
