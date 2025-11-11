@@ -75,6 +75,22 @@ export async function evaluate(body: EvaluationRequestBody, env: { GEMINI_API_KE
     // Try to use real LLM evaluation if API key is available
     return evaluateReview(evaluationRequest, env);
   } catch (error) {
-    throw new Error(`LLM evaluation failed, falling back to mock: ${(error as Error).message}`);
+    // Validation errors should be re-thrown as-is
+    if (error instanceof Error) {
+      // Check if this is a validation error (from validateRequest)
+      if (
+        error.message.includes("Invalid") ||
+        error.message.includes("missing") ||
+        error.message.includes("too short") ||
+        error.message.includes("Unknown")
+      ) {
+        throw error;
+      }
+    }
+
+    // Wrap other errors with LLM fallback message
+    throw new Error(`LLM evaluation failed, falling back to mock: ${(error as Error).message}`, {
+      cause: error,
+    });
   }
 }

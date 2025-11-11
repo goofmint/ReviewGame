@@ -31,12 +31,18 @@ export async function action({
   context,
 }: {
   request: Request;
-  params: { lang?: string; level?: string, review?: string };
+  params: { lang?: string; level?: string };
   context?: { cloudflare?: { env?: Record<string, unknown> } };
 }) {
-  if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+      status: 405,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const body = await request.json() as EvaluationRequestBody;
-  const { GEMINI_API_KEY } = context?.cloudflare?.env as { GEMINI_API_KEY: string };
+  const env = context?.cloudflare?.env as { GEMINI_API_KEY?: string } | undefined;
+  const GEMINI_API_KEY = env?.GEMINI_API_KEY;
   try {
     const result = await evaluate(body, { GEMINI_API_KEY });
     console.log({ result });
@@ -44,7 +50,10 @@ export async function action({
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response((error as Error).message, { status: 500 });
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 
@@ -209,13 +218,21 @@ export default function ProblemPage() {
                 <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 overflow-x-auto">
                   <pre className="text-sm">
                     {codeLines.map((line: string, index: number) => (
-                      <div
+                      <button
+                        type="button"
                         key={index}
-                        className="flex hover:bg-yellow-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                        className="flex hover:bg-yellow-50 dark:hover:bg-gray-700 cursor-pointer transition-colors w-full text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
                         onClick={() =>
                           insertTemplate(`コードの${index + 1}行目: `)
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            insertTemplate(`コードの${index + 1}行目: `);
+                          }
+                        }}
                         title="クリックしてレビューに追加"
+                        aria-label={`${index + 1}行目をレビューに追加`}
                       >
                         <span className="select-none text-gray-400 dark:text-gray-600 w-10 text-right mr-4">
                           {index + 1}
@@ -223,7 +240,7 @@ export default function ProblemPage() {
                         <code className="text-gray-800 dark:text-gray-200">
                           {line || " "}
                         </code>
-                      </div>
+                      </button>
                     ))}
                   </pre>
                 </div>

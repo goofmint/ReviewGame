@@ -6,7 +6,7 @@
  * Records progress to localStorage for level unlocking
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import type { Route } from "./+types/$lang.$level.result";
 import { recordAttempt } from "~/utils/progress";
@@ -34,15 +34,18 @@ export default function ResultPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as ResultState | null;
-  const [progressRecorded, setProgressRecorded] = useState(false);
+  const lastRecordedKey = useRef<string>("");
 
   // Record progress when page loads
   useEffect(() => {
-    if (state && lang && level && !progressRecorded) {
-      recordAttempt(lang, level, state.score);
-      setProgressRecorded(true);
+    if (state && lang && level) {
+      const key = `${lang}-${level}-${state.score}`;
+      if (lastRecordedKey.current !== key) {
+        recordAttempt(lang, level, state.score);
+        lastRecordedKey.current = key;
+      }
     }
-  }, [state, lang, level, progressRecorded]);
+  }, [state, lang, level]);
 
   // If no state, redirect back to problem page
   useEffect(() => {
@@ -56,9 +59,15 @@ export default function ResultPage() {
   }
 
   // Check if next level exists
-  const nextLevel = String(Number(level) + 1);
+  const parsedLevel = parseInt(level, 10);
+  let hasNextLevel = false;
+  let nextLevel = "";
   const langProblems = lang in problems ? problems[lang as keyof typeof problems] : null;
-  const hasNextLevel = langProblems && nextLevel in langProblems;
+
+  if (Number.isInteger(parsedLevel) && langProblems) {
+    nextLevel = String(parsedLevel + 1);
+    hasNextLevel = nextLevel in langProblems;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">

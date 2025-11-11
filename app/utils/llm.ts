@@ -108,10 +108,6 @@ async function callGeminiAPI(
     );
   }
 
-  // Create abort controller for timeout
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), LLM_REQUEST_TIMEOUT);
-
   try {
     // Initialize Gemini AI client
     const ai = new GoogleGenAI({ apiKey });
@@ -127,7 +123,6 @@ async function callGeminiAPI(
     });
 
     const response = await Promise.race([generatePromise, timeoutPromise]);
-    clearTimeout(timeoutId);
 
     // Extract text from response
     const textContent = response.text;
@@ -157,8 +152,6 @@ async function callGeminiAPI(
 
     return parsed;
   } catch (error) {
-    clearTimeout(timeoutId);
-
     if (error instanceof Error && error.message.includes("timed out")) {
       throw new Error(
         "LLM request timed out. Please try again."
