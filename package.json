@@ -23,7 +23,8 @@
 		"isbot": "^5.1.31",
 		"react": "^19.1.1",
 		"react-dom": "^19.1.1",
-		"react-router": "^7.9.2"
+		"react-router": "^7.9.2",
+		"react-syntax-highlighter": "^16.1.0"
 	},
 	"devDependencies": {
 		"@cloudflare/vite-plugin": "^1.13.5",
@@ -36,6 +37,7 @@
 		"@types/node": "^22",
 		"@types/react": "^19.1.13",
 		"@types/react-dom": "^19.1.9",
+		"@types/react-syntax-highlighter": "^15.5.13",
 		"@vitest/ui": "^4.0.8",
 		"gray-matter": "^4.0.3",
 		"jsdom": "^27.1.0",
