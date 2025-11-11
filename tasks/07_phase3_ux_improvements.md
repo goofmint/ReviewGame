@@ -4,7 +4,7 @@
 
 Phase 3では、ユーザー体験を向上させるための6つの機能を実装します：
 
-1. **コード/要件クリック時の自動入力** - レビュー作成を効率化
+1. **要件クリック時のMarkdown見出し自動入力** - レビュー作成を効率化（コードクリックは実装済み）
 2. **シンタックスハイライト** - コードの可読性向上
 3. **アニメーション・トランジション** - スムーズな画面遷移
 4. **レスポンシブデザイン最適化** - モバイル対応の改善
@@ -13,62 +13,55 @@ Phase 3では、ユーザー体験を向上させるための6つの機能を実
 
 ---
 
-## 2. コード/要件クリック時の自動入力
+## 2. 要件クリック時のMarkdown見出し自動入力
 
 ### 2.1 目的
-ユーザーがコードの特定行や要件項目をクリックすると、レビュー入力エリアに参照テキストを自動挿入し、レビュー作成を効率化します。
+ユーザーが要件セクションの各項目をクリックすると、レビュー入力エリアにMarkdown見出し形式で参照テキストを自動挿入し、レビュー作成を効率化します。
+
+**注意**: コードの行クリック機能は既に実装済みです（`app/routes/$lang.$level.tsx` の226行目）。
 
 ### 2.2 インタフェース定義
 
 ```typescript
-// app/types/auto-insert.ts
+// app/types/requirement-insert.ts
 
-interface ClickableElement {
-  type: 'code' | 'requirement';
-  lineNumber?: number;
+interface RequirementItem {
   text: string;
-  requirementIndex?: number;
+  index: number;
 }
 
-interface AutoInsertTemplate {
-  prefix: string;
-  content: string;
-  suffix: string;
-}
-
-interface AutoInsertService {
+interface RequirementInsertService {
   /**
-   * クリック可能な要素からテンプレートテキストを生成
-   * @param element - クリックされた要素
-   * @returns 生成されたテンプレート
+   * 要件テキストからMarkdown見出しを生成
+   * @param requirement - 要件テキスト
+   * @returns Markdown見出し文字列
    */
-  generateTemplate(element: ClickableElement): AutoInsertTemplate;
+  generateMarkdownHeading(requirement: string): string;
 
   /**
-   * テキストエリアに自動挿入
-   * @param currentText - 現在のテキスト
-   * @param template - 挿入するテンプレート
-   * @param cursorPosition - 現在のカーソル位置
-   * @returns 新しいテキストと新しいカーソル位置
+   * 要件一覧を解析してクリック可能な項目に分割
+   * @param requirementsText - 要件全体のテキスト
+   * @returns 要件項目の配列
    */
-  insertTemplate(
-    currentText: string,
-    template: AutoInsertTemplate,
-    cursorPosition: number
-  ): { newText: string; newCursorPosition: number };
+  parseRequirements(requirementsText: string): RequirementItem[];
 }
 ```
 
 ### 2.3 実装フロー
-1. CodeDisplayコンポーネント内の各行にクリックハンドラを設定
-2. クリック時、行番号と行内容を取得
-3. テンプレート生成：`「コードの{行番号}行目: {行の内容}\n」`
+1. RequirementsDisplayコンポーネント内で要件テキストを解析（箇条書き項目を検出）
+2. 各要件項目にクリックハンドラを設定
+3. クリック時、Markdown見出し形式のテンプレートを生成：`## 要件「{要件テキスト}」について\n\n`
 4. ReviewInputコンポーネントのテキストエリアに挿入
-5. カーソル位置を挿入テキストの末尾に移動
+5. カーソル位置を挿入テキストの末尾（見出しの後）に移動
 
 ### 2.4 テンプレート例
-- コードクリック時：`「コードの15行目: if (age < 0) に関して、」`
-- 要件クリック時：`「要件「年齢は0以上150以下の整数である必要がある」について、」`
+要件項目「年齢は0以上150以下の整数である必要がある」をクリックした場合：
+```markdown
+## 要件「年齢は0以上150以下の整数である必要がある」について
+
+```
+
+挿入後、ユーザーはこの見出しの下に具体的なレビュー内容を記述できます。
 
 ---
 
@@ -362,6 +355,8 @@ interface TimeoutConfig {
 ### 7.1 目的
 ユーザーがスコアをX（旧Twitter）でシェアできるようにし、アプリのバイラル性を高めます。
 
+**認証方式**: OAuth2などの複雑な認証は不要。X Web Intent（リンククリックでXの投稿画面に遷移）を使用します。
+
 ### 7.2 インタフェース定義
 
 ```typescript
@@ -487,11 +482,12 @@ interface ImageLayout {
     color: "rgba(255, 255, 255, 0.8)";
     position: { x: 600, y: 350 }; // 中央揃え
   };
-  icon: {
-    path: "/public/images/coderabbit-icon.png";
-    size: { width: 80, height: 80 };
-    position: { x: 1100, y: 530 }; // 右下
-    opacity: 0.8;
+  logo: {
+    // CodeRabbitの横長ロゴ
+    path: "public/images/coderabbit-logo.png";
+    size: { width: 200, height: 60 }; // 横長のロゴサイズ（アスペクト比に応じて調整）
+    position: { x: 1000, y: 540 }; // 右下
+    opacity: 0.9;
   };
   badge?: {
     // 70点以上の場合のみ表示
@@ -503,6 +499,11 @@ interface ImageLayout {
   };
 }
 ```
+
+**CodeRabbitロゴのアップロード場所**: `public/images/coderabbit-logo.png`
+- 横長の画像を配置してください
+- 推奨サイズ：幅200-300px程度（高さは自動調整）
+- 背景透過PNG形式を推奨
 
 #### 7.3.3 言語別グラデーション
 ```typescript
@@ -532,7 +533,7 @@ interface R2Config {
 }
 ```
 
-### 7.5 Xシェアフロー
+### 7.5 Xシェアフロー（OAuth2不要、Web Intent方式）
 
 1. **ユーザーアクション**：結果画面で「Xでシェア」ボタンをクリック
 2. **クライアント処理**：
@@ -544,11 +545,13 @@ interface R2Config {
    - R2にアップロード
    - 公開URLを取得
    - ツイートテキスト生成
-   - X Web Intent URL生成
+   - X Web Intent URL生成（`https://twitter.com/intent/tweet?text=...&url=...`）
 4. **クライアント処理**：
    - ローディング終了
-   - 新しいタブでX Web Intent URLを開く
-5. **ユーザーアクション**：Xの投稿画面でツイート
+   - **新しいタブでX Web Intent URLを開く**（`window.open(tweetUrl, '_blank')`）
+5. **ユーザーアクション**：Xのログイン（未ログインの場合）→投稿画面でツイート内容を確認→投稿ボタンをクリック
+
+**重要**: OAuth2による自動投稿ではなく、Web Intent経由でユーザーがXの投稿画面で手動投稿する形式です。これにより認証の複雑さを回避し、シンプルな実装を実現します。
 
 ### 7.6 ツイートテキストテンプレート
 ```typescript
@@ -589,14 +592,14 @@ interface ErrorHandler {
 ### 8.1 Phase 3-1（優先度：高）
 1. **ローディング状態表示** - ユーザーフィードバックの基盤
 2. **シンタックスハイライト** - コード可読性の向上
-3. **コード/要件クリック時の自動入力** - レビュー効率化
+3. **要件クリック時のMarkdown見出し挿入** - レビュー効率化（コードクリックは実装済み）
 
 ### 8.2 Phase 3-2（優先度：中）
 4. **レスポンシブデザイン最適化** - モバイル対応
 5. **アニメーション・トランジション** - UX向上
 
 ### 8.3 Phase 3-3（優先度：高、独立実装可能）
-6. **Xシェア機能** - バイラル性向上
+6. **Xシェア機能** - バイラル性向上（Web Intent方式、OAuth2不要）
 
 ---
 
@@ -664,10 +667,10 @@ GAME_URL=https://review-game.com
 - シェアボタンクリックからX Intent表示まで
 
 ### 11.3 E2Eテスト（Playwright）
-- コードクリック時の自動入力動作
+- 要件クリック時のMarkdown見出し挿入動作
 - レスポンシブレイアウトの検証
 - ローディング表示の確認
-- シェア機能の動作確認
+- シェア機能の動作確認（Web Intent URLの生成と遷移）
 
 ### 11.4 ビジュアルリグレッションテスト
 - 生成される画像のビジュアル確認
@@ -695,4 +698,17 @@ GAME_URL=https://review-game.com
 
 ## 13. まとめ
 
-Phase 3では、6つのUX改善機能を実装し、ユーザー体験を大幅に向上させます。特にXシェア機能はアプリの成長に直結する重要な機能です。実装は3つのサブフェーズに分け、段階的にリリースすることで、早期のユーザーフィードバックを得ながら品質を高めていきます。
+Phase 3では、6つのUX改善機能を実装し、ユーザー体験を大幅に向上させます：
+
+1. **要件クリック時のMarkdown見出し挿入**：レビュー作成の効率化（コードクリックは既に実装済み）
+2. **シンタックスハイライト**：コードの可読性向上
+3. **アニメーション・トランジション**：滑らかな画面遷移
+4. **レスポンシブデザイン**：全デバイスでの最適表示
+5. **ローディング状態表示**：非同期処理のユーザーフィードバック
+6. **Xシェア機能**：バイラル性の向上（Web Intent方式、OAuth2不要）
+
+特にXシェア機能はアプリの成長に直結する重要な機能です。Web Intent方式により、OAuth2などの複雑な認証を回避し、シンプルかつ効果的な実装を実現します。
+
+実装は3つのサブフェーズに分け、段階的にリリースすることで、早期のユーザーフィードバックを得ながら品質を高めていきます。
+
+**CodeRabbitロゴのアップロードについて**: 横長のロゴ画像を `public/images/coderabbit-logo.png` に配置してください。
