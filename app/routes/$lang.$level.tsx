@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { problems } from "~/data/problems";
+import { ErrorCard } from "~/components/ErrorCard";
 import type { Route } from "./+types/$lang.$level";
 
 export function meta({ params }: Route.MetaArgs) {
@@ -16,23 +17,16 @@ export default function ProblemPage() {
   const { lang, level } = useParams();
   const navigate = useNavigate();
   const [review, setReview] = useState("");
+  const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!lang || !level || !(lang in problems)) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-            問題が見つかりません
-          </h1>
-          <Link
-            to="/"
-            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            言語選択に戻る
-          </Link>
-        </div>
-      </div>
+      <ErrorCard
+        title="問題が見つかりません"
+        linkTo="/"
+        linkText="言語選択に戻る"
+      />
     );
   }
 
@@ -41,19 +35,11 @@ export default function ProblemPage() {
 
   if (!problem) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-            このレベルの問題はまだ準備されていません
-          </h1>
-          <Link
-            to={`/${lang}`}
-            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            レベル選択に戻る
-          </Link>
-        </div>
-      </div>
+      <ErrorCard
+        title="このレベルの問題はまだ準備されていません"
+        linkTo={`/${lang}`}
+        linkText="レベル選択に戻る"
+      />
     );
   }
 
@@ -62,10 +48,11 @@ export default function ProblemPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!review.trim()) {
-      alert("レビューを入力してください");
+      setError("レビューを入力してください");
       return;
     }
 
+    setError("");
     setIsSubmitting(true);
 
     // MVP: 静的な結果を表示
@@ -155,10 +142,18 @@ export default function ProblemPage() {
               </h2>
               <textarea
                 value={review}
-                onChange={(e) => setReview(e.target.value)}
+                onChange={(e) => {
+                  setReview(e.target.value);
+                  setError("");
+                }}
                 className="w-full h-64 p-4 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                 placeholder="コードの問題点を指摘してください...&#10;&#10;例:&#10;- コードの5行目: 上限チェックがありません&#10;- 要件「150以下の整数」について: 型チェックが不足しています"
               />
+              {error && (
+                <p className="text-red-600 dark:text-red-400 text-sm mt-2">
+                  {error}
+                </p>
+              )}
               <button
                 type="submit"
                 disabled={isSubmitting || !review.trim()}
