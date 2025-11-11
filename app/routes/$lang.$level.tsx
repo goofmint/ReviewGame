@@ -142,6 +142,7 @@ export default function ProblemPage() {
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data) {
       const result = fetcher.data as EvaluationResult;
+      console.log({ result });
       navigate(`/${lang}/${level}/result`, {
         state: {
           review,
