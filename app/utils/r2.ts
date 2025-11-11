@@ -97,38 +97,116 @@ export function generateStorageKey(
 }
 
 /**
- * Uploads an image to R2 storage
+ * Retry configuration for network operations
+ */
+interface RetryConfig {
+  maxAttempts: number;
+  backoffDelays: number[]; // in milliseconds
+}
+
+/**
+ * Default retry configuration: 4 attempts with exponential backoff
+ * Delays: 2s, 4s, 8s, 16s (similar to git operation retry pattern)
+ */
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxAttempts: 4,
+  backoffDelays: [2000, 4000, 8000, 16000],
+};
+
+/**
+ * Executes an async operation with retry logic and exponential backoff
+ * Retries network errors up to maxAttempts times with increasing delays
+ *
+ * @param operation - The async operation to execute
+ * @param config - Retry configuration (attempts and backoff delays)
+ * @returns Promise resolving to the operation result
+ * @throws Error if all retry attempts fail
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  config: RetryConfig = DEFAULT_RETRY_CONFIG
+): Promise<T> {
+  let lastError: Error | unknown;
+
+  for (let attempt = 1; attempt <= config.maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+
+      // Check if error is retryable (network errors)
+      const isRetryable =
+        error instanceof Error &&
+        (error.message.includes("Network") ||
+          error.message.includes("network") ||
+          error.message.includes("connection") ||
+          (error as any).retryable === true);
+
+      // If not retryable or last attempt, throw immediately
+      if (!isRetryable || attempt === config.maxAttempts) {
+        throw error;
+      }
+
+      // Log retry attempt
+      console.warn(
+        `R2 upload failed (attempt ${attempt}/${config.maxAttempts}): ${
+          error instanceof Error ? error.message : String(error)
+        }. Retrying in ${config.backoffDelays[attempt - 1]}ms...`
+      );
+
+      // Wait before retry (exponential backoff)
+      await new Promise((resolve) =>
+        setTimeout(resolve, config.backoffDelays[attempt - 1])
+      );
+    }
+  }
+
+  // This should never be reached, but TypeScript needs it
+  throw lastError;
+}
+
+/**
+ * Uploads an image to R2 storage with automatic retry on network errors
  * Includes proper content-type and cache headers
+ * Retries up to 4 times with exponential backoff (2s, 4s, 8s, 16s)
  *
  * @param bucket - R2 bucket binding from Cloudflare Workers
  * @param key - Storage key for the image
  * @param imageData - Image data as ArrayBuffer
  * @returns Promise resolving to the R2Object
- * @throws Error if upload fails
+ * @throws Error if upload fails after all retry attempts
  */
 export async function uploadImageToR2(
   bucket: R2Bucket,
   key: string,
   imageData: ArrayBuffer
 ): Promise<R2Object> {
-  // Validate image data before upload
+  // Validate image data before upload (no retry needed for validation)
   validateImageData(imageData);
 
-  const result = await bucket.put(key, imageData, {
-    httpMetadata: {
-      contentType: "image/png",
-      // Cache for 1 year (images are immutable with timestamp in filename)
-      cacheControl: "public, max-age=31536000, immutable",
-    },
-    customMetadata: {
-      uploadedAt: new Date().toISOString(),
-      source: "code-review-game",
-    },
-  });
+  // Execute upload with retry logic
+  const result = await withRetry(async () => {
+    const uploadResult = await bucket.put(key, imageData, {
+      httpMetadata: {
+        contentType: "image/png",
+        // Cache for 1 year (images are immutable with timestamp in filename)
+        cacheControl: "public, max-age=31536000, immutable",
+      },
+      customMetadata: {
+        uploadedAt: new Date().toISOString(),
+        source: "code-review-game",
+      },
+    });
 
-  if (!result) {
-    throw new Error("Failed to upload image to R2");
-  }
+    if (!uploadResult) {
+      // Create a retryable error for null results
+      const error = new Error("Failed to upload image to R2: null result");
+      (error as any).retryable = true;
+      throw error;
+    }
+
+    return uploadResult;
+  });
 
   return result;
 }
