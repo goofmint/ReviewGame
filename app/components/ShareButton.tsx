@@ -2,7 +2,7 @@
  * ShareButton Component
  * Provides X (Twitter) sharing functionality with image generation
  * Generates share image, uploads to R2, and opens X share dialog
- * Uses Remix useFetcher for server communication
+ * Uses Remix useFetcher to call the current route's action
  */
 
 import { useEffect, useState } from "react";
@@ -33,7 +33,7 @@ type GenerationState = "idle" | "generating" | "ready" | "error";
 /**
  * ShareButton component that handles the entire share flow:
  * 1. Generate OG image using Canvas API (client-side)
- * 2. Upload image to R2 via useFetcher
+ * 2. Upload image to R2 via useFetcher (calls current route's action)
  * 3. Open X (Twitter) share dialog with pre-filled content
  */
 export function ShareButton({
@@ -86,7 +86,7 @@ export function ShareButton({
       setImageData(base64Image);
       setGenerationState("ready");
 
-      // Step 3: Upload to R2 via useFetcher
+      // Step 3: Upload to R2 via useFetcher (calls the current route's action)
       fetcher.submit(
         {
           imageData: base64Image,
@@ -96,7 +96,6 @@ export function ShareButton({
         },
         {
           method: "POST",
-          action: "/api/share-image",
           encType: "application/json",
         }
       );
