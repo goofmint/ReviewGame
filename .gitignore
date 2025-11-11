@@ -13,6 +13,9 @@
 .dev.vars*
 worker-configuration.d.ts
 
+# Test artifacts
+playwright-report/
+test-results/
 
 !.dev.vars.example
 !.env.example
