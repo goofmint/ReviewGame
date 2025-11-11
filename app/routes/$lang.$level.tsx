@@ -4,12 +4,20 @@
  *
  * Users can read the requirements, examine the code, and submit their review
  * Upon submission, the review is sent to the LLM evaluation API
+ *
+ * Phase 3 Updates:
+ * - シンタックスハイライト対応（CodeDisplayコンポーネント）
+ * - 要件クリック時のMarkdown見出し自動挿入（RequirementsDisplayコンポーネント）
+ * - ローディング状態表示（LoadingSpinnerコンポーネント）
  */
 
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useFetcher } from "react-router";
 import { problems } from "~/data/problems";
 import { ErrorCard } from "~/components/ErrorCard";
+import { CodeDisplay } from "~/components/CodeDisplay";
+import { RequirementsDisplay } from "~/components/RequirementsDisplay";
+import { LoadingSpinner } from "~/components/LoadingSpinner";
 import { isLevelUnlocked } from "~/utils/progress";
 import type { Route } from "./+types/$lang.$level";
 import type { EvaluationResult } from "~/types/problem";
@@ -25,6 +33,10 @@ export function meta({ params }: Route.MetaArgs) {
   ];
 }
 
+/**
+ * レビュー評価のアクション
+ * LLMにレビュー内容を送信して評価結果を取得
+ */
 export async function action({
   request,
   params,
@@ -40,9 +52,13 @@ export async function action({
       headers: { "Content-Type": "application/json" },
     });
   }
-  const body = await request.json() as EvaluationRequestBody;
-  const env = context?.cloudflare?.env as { GEMINI_API_KEY?: string } | undefined;
+
+  const body = (await request.json()) as EvaluationRequestBody;
+  const env = context?.cloudflare?.env as
+    | { GEMINI_API_KEY?: string }
+    | undefined;
   const GEMINI_API_KEY = env?.GEMINI_API_KEY;
+
   try {
     const result = await evaluate(body, { GEMINI_API_KEY });
     console.log({ result });
@@ -50,13 +66,15 @@ export async function action({
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: (error as Error).message }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: (error as Error).message }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 }
-
 
 export default function ProblemPage() {
   const { lang, level } = useParams();
@@ -66,7 +84,7 @@ export default function ProblemPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Validate parameters and check if problem exists
+  // パラメータの検証と問題の存在確認
   if (!lang || !level || !(lang in problems)) {
     return (
       <ErrorCard
@@ -90,7 +108,7 @@ export default function ProblemPage() {
     );
   }
 
-  // Check if level is unlocked (client-side check only, not security-critical)
+  // レベルのアンロック状態を確認（クライアント側のチェックのみ）
   const unlocked = isLevelUnlocked(lang, level);
   if (!unlocked) {
     return (
@@ -102,16 +120,14 @@ export default function ProblemPage() {
     );
   }
 
-  const codeLines = problem.code.split("\n");
-
   /**
-   * Handles review submission
-   * Sends the review to the evaluation API and navigates to the result page
+   * レビュー送信ハンドラ
+   * 評価APIにレビューを送信し、結果画面に遷移
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate review content
+    // レビュー内容のバリデーション
     if (!review.trim()) {
       setError("レビューを入力してください");
       return;
@@ -147,7 +163,11 @@ export default function ProblemPage() {
       setIsSubmitting(false);
     }
   };
-  
+
+  /**
+   * 評価完了時の処理
+   * 結果画面に遷移
+   */
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data) {
       const result = fetcher.data as EvaluationResult;
@@ -159,19 +179,35 @@ export default function ProblemPage() {
         },
       });
     }
-  }, [fetcher.state, fetcher.data]);
+  }, [fetcher.state, fetcher.data, navigate, lang, level, review]);
 
   /**
-   * Inserts a template text into the review textarea
-   * Useful for helping users reference specific lines
+   * コードの行がクリックされた時の処理
+   * 「コードの{行番号}行目: 」をレビュー入力エリアに挿入
    */
-  const insertTemplate = (template: string) => {
+  const handleCodeLineClick = (lineNumber: number) => {
+    const template = `コードの${lineNumber}行目: `;
+    setReview((prev) => (prev ? `${prev}\n${template}` : template));
+  };
+
+  /**
+   * 要件がクリックされた時の処理
+   * Markdown見出し形式で要件をレビュー入力エリアに挿入
+   */
+  const handleRequirementClick = (requirement: string) => {
+    const template = `## 要件「${requirement}」について\n\n`;
     setReview((prev) => (prev ? `${prev}\n${template}` : template));
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+      {/* ローディング表示 */}
+      {fetcher.state === "submitting" && (
+        <LoadingSpinner message="レビューを評価中..." />
+      )}
+
       <div className="container mx-auto px-4 py-8">
+        {/* ヘッダー */}
         <header className="mb-8">
           <Link
             to={`/${lang}`}
@@ -192,66 +228,38 @@ export default function ProblemPage() {
         </header>
 
         <fetcher.Form method="post" onSubmit={handleSubmit}>
-          {/* Two-column layout: requirements/code on left (2/3), review on right (1/3) */}
+          {/* 2カラムレイアウト: 要件/コード（左2/3） + レビュー入力（右1/3） */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            {/* Left side: Requirements and Code stacked vertically (2/3 width) */}
+            {/* 左側: 要件とコードを縦に並べる */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Requirements Section */}
+              {/* 要件セクション */}
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                  <span className="text-2xl mr-2">📋</span>
-                  要件
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  📋 要件
                 </h2>
-                <div className="prose dark:prose-invert max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-sans">
-                    {problem.requirements}
-                  </pre>
-                </div>
+                <RequirementsDisplay
+                  requirements={problem.requirements}
+                  onRequirementClick={handleRequirementClick}
+                />
               </div>
 
-              {/* Code Section */}
+              {/* コードセクション */}
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                  <span className="text-2xl mr-2">💻</span>
-                  コード
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                  💻 コード
                 </h2>
-                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                  <pre className="text-sm">
-                    {codeLines.map((line: string, index: number) => (
-                      <button
-                        type="button"
-                        key={index}
-                        className="flex hover:bg-yellow-50 dark:hover:bg-gray-700 cursor-pointer transition-colors w-full text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        onClick={() =>
-                          insertTemplate(`コードの${index + 1}行目: `)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            insertTemplate(`コードの${index + 1}行目: `);
-                          }
-                        }}
-                        title="クリックしてレビューに追加"
-                        aria-label={`${index + 1}行目をレビューに追加`}
-                      >
-                        <span className="select-none text-gray-400 dark:text-gray-600 w-10 text-right mr-4">
-                          {index + 1}
-                        </span>
-                        <code className="text-gray-800 dark:text-gray-200">
-                          {line || " "}
-                        </code>
-                      </button>
-                    ))}
-                  </pre>
-                </div>
+                <CodeDisplay
+                  code={problem.code}
+                  language={problem.language}
+                  onLineClick={handleCodeLineClick}
+                />
               </div>
             </div>
 
-            {/* Right side: Review Input Section (1/3 width) */}
+            {/* 右側: レビュー入力セクション */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 lg:sticky lg:top-8 lg:self-start">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                <span className="text-2xl mr-2">✍️</span>
-                あなたのレビュー
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                ✍️ あなたのレビュー
               </h2>
               <textarea
                 value={review}
@@ -260,7 +268,7 @@ export default function ProblemPage() {
                   setError("");
                 }}
                 className="w-full h-96 p-4 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                placeholder="コードの問題点を指摘してください...&#10;&#10;例:&#10;- コードの5行目: 上限チェックがありません&#10;- 要件「150以下の整数」について: 型チェックが不足しています"
+                placeholder="コードの問題点を指摘してください...&#10;&#10;ヒント:&#10;- コードの行をクリックすると行番号が自動入力されます&#10;- 要件の項目をクリックするとMarkdown見出しが自動入力されます"
               />
               {error && (
                 <p className="text-red-600 dark:text-red-400 text-sm mt-2">
@@ -278,7 +286,7 @@ export default function ProblemPage() {
           </div>
         </fetcher.Form>
 
-        {/* Hints Section */}
+        {/* ヒントセクション */}
         <div className="max-w-4xl mx-auto mt-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             💡 ヒント
@@ -289,6 +297,7 @@ export default function ProblemPage() {
             <li>型チェックは必要ありませんか？</li>
             <li>境界値のテストは考慮されていますか？</li>
             <li>コードの行をクリックすると、レビューに行番号を追加できます</li>
+            <li>要件の項目をクリックすると、Markdown見出しを追加できます</li>
           </ul>
         </div>
       </div>
