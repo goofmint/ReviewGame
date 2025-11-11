@@ -9,7 +9,7 @@ export interface Problem {
 
 export interface UserReview {
   content: string;
-  submittedAt: Date;
+  submittedAt: string; // ISO 8601 timestamp (e.g., new Date().toISOString())
 }
 
 export interface EvaluationResult {
@@ -22,7 +22,8 @@ export interface EvaluationResult {
 
 export interface ProgressState {
   [language: string]: {
-    [level: number]: {
+    [level: string]: {
+      // Level keys are strings like "1", "2", etc.
       unlocked: boolean;
       bestScore?: number;
       attempts: number;
