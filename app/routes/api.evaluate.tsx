@@ -4,10 +4,30 @@
  *
  * This route is called from the problem page when users submit their reviews
  * It returns a JSON response with the evaluation result
+ *
+ * This is a resource route - it only accepts POST requests for evaluation
  */
 
 import { evaluateReview, createMockEvaluation } from "~/utils/llm";
 import { problems } from "~/data/problems";
+
+/**
+ * GET handler - Rejects GET requests with Method Not Allowed
+ * This endpoint only accepts POST requests
+ */
+export async function loader() {
+  return Response.json(
+    {
+      error: "Method Not Allowed. This endpoint only accepts POST requests.",
+    },
+    {
+      status: 405,
+      headers: {
+        Allow: "POST",
+      },
+    }
+  );
+}
 
 /**
  * Request body interface for the evaluation endpoint
@@ -60,6 +80,21 @@ function validateRequest(body: EvaluationRequestBody): string | null {
  * Accepts a review submission and returns an evaluation from the LLM
  */
 export async function action({ request, context }: { request: Request; context?: { cloudflare?: { env?: Record<string, unknown> } } }) {
+  // Ensure this is a POST request
+  if (request.method !== "POST") {
+    return Response.json(
+      {
+        error: "Method Not Allowed. This endpoint only accepts POST requests.",
+      },
+      {
+        status: 405,
+        headers: {
+          Allow: "POST",
+        },
+      }
+    );
+  }
+
   try {
     // Parse request body
     const body = (await request.json()) as EvaluationRequestBody;
