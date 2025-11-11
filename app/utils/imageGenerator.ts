@@ -87,10 +87,21 @@ export async function generateShareImage(
     language.charAt(0).toUpperCase() + language.slice(1);
   ctx.fillText(`${displayName} - Level ${level}`, IMAGE_WIDTH / 2, 380);
 
-  // Draw CodeRabbit branding (text-based, as we may not have the icon)
-  ctx.font = "24px sans-serif";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-  ctx.fillText("Powered by CodeRabbit", IMAGE_WIDTH / 2, IMAGE_HEIGHT - 50);
+  // Load and draw CodeRabbit icon
+  try {
+    const iconImage = await loadImage("/images/coderabbit-icon.png");
+    const iconSize = 80;
+    const iconX = 1100;
+    const iconY = 530;
+
+    ctx.drawImage(iconImage, iconX, iconY, iconSize, iconSize);
+  } catch (error) {
+    // Fallback to text if icon fails to load
+    console.warn("Failed to load CodeRabbit icon:", error);
+    ctx.font = "24px sans-serif";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.fillText("Powered by CodeRabbit", IMAGE_WIDTH / 2, IMAGE_HEIGHT - 50);
+  }
 
   // Convert canvas to Blob
   return new Promise<Blob>((resolve, reject) => {
