@@ -1,9 +1,10 @@
 /**
  * LLM Integration Module
  * Handles communication with LLM APIs for code review evaluation
- * Supports both Cloudflare AI and external APIs (OpenAI/Anthropic)
+ * Uses Google Gemini API for evaluation
  */
 
+import { GoogleGenAI } from "@google/genai";
 import type { EvaluationResult } from "~/types/problem";
 import { LLM_REQUEST_TIMEOUT, PASSING_SCORE } from "./constants";
 
@@ -88,22 +89,22 @@ ${
 }
 
 /**
- * Calls the Anthropic Claude API to evaluate a code review
- * This function requires ANTHROPIC_API_KEY to be set in the environment
+ * Calls the Google Gemini API to evaluate a code review
+ * This function requires GEMINI_API_KEY to be set in the environment
  *
  * @param prompt - The evaluation prompt
  * @param env - The environment object containing API keys
  * @returns The parsed LLM response
  */
-async function callAnthropicAPI(
+async function callGeminiAPI(
   prompt: string,
-  env: { ANTHROPIC_API_KEY?: string }
+  env: { GEMINI_API_KEY?: string }
 ): Promise<LLMEvaluationResponse> {
-  const apiKey = env.ANTHROPIC_API_KEY;
+  const apiKey = env.GEMINI_API_KEY;
 
   if (!apiKey) {
     throw new Error(
-      "ANTHROPIC_API_KEY is not configured. Please set it in your environment."
+      "GEMINI_API_KEY is not configured. Please set it in your environment."
     );
   }
 
@@ -112,45 +113,31 @@ async function callAnthropicAPI(
   const timeoutId = setTimeout(() => controller.abort(), LLM_REQUEST_TIMEOUT);
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 2048,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      }),
-      signal: controller.signal,
+    // Initialize Gemini AI client
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Generate content with timeout handling using gemini-2.0-flash-exp model
+    const generatePromise = ai.models.generateContent({
+      model: "gemini-2.0-flash-exp",
+      contents: prompt,
     });
 
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Request timed out")), LLM_REQUEST_TIMEOUT);
+    });
+
+    const response = await Promise.race([generatePromise, timeoutPromise]);
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(
-        `Anthropic API error (${response.status}): ${errorText}`
-      );
-    }
+    // Extract text from response
+    const textContent = response.text;
 
-    const data = await response.json() as { content?: Array<{ text?: string }> };
-
-    // Extract the text content from Claude's response
-    const textContent = data.content?.[0]?.text;
     if (!textContent) {
-      throw new Error("No text content in Anthropic API response");
+      throw new Error("No text content in Gemini API response");
     }
 
     // Parse the JSON from the response
-    // Claude may wrap JSON in code blocks, so we need to extract it
+    // Gemini may wrap JSON in code blocks or include extra text, so we need to extract it
     const jsonMatch = textContent.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error("Could not find JSON in LLM response");
@@ -172,7 +159,7 @@ async function callAnthropicAPI(
   } catch (error) {
     clearTimeout(timeoutId);
 
-    if (error instanceof Error && error.name === "AbortError") {
+    if (error instanceof Error && error.message.includes("timed out")) {
       throw new Error(
         "LLM request timed out. Please try again."
       );
@@ -192,13 +179,13 @@ async function callAnthropicAPI(
  */
 export async function evaluateReview(
   request: EvaluationRequest,
-  env: { ANTHROPIC_API_KEY?: string }
+  env: { GEMINI_API_KEY?: string }
 ): Promise<EvaluationResult> {
   // Build the prompt
   const prompt = buildEvaluationPrompt(request);
 
   // Call the LLM API
-  const llmResponse = await callAnthropicAPI(prompt, env);
+  const llmResponse = await callGeminiAPI(prompt, env);
 
   // Ensure score is within valid range
   const score = Math.max(0, Math.min(100, Math.round(llmResponse.score)));

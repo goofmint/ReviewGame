@@ -89,13 +89,13 @@ export async function action({ request, context }: { request: Request; context?:
 
     // Get environment from context (Cloudflare Workers)
     const env = (context?.cloudflare?.env ?? {}) as {
-      ANTHROPIC_API_KEY?: string;
+      GEMINI_API_KEY?: string;
     };
 
     let result;
 
     // Try to use real LLM evaluation if API key is available
-    if (env.ANTHROPIC_API_KEY) {
+    if (env.GEMINI_API_KEY) {
       try {
         result = await evaluateReview(evaluationRequest, env);
       } catch (error) {
@@ -105,7 +105,7 @@ export async function action({ request, context }: { request: Request; context?:
       }
     } else {
       // No API key configured, use mock evaluation
-      console.warn("ANTHROPIC_API_KEY not configured, using mock evaluation");
+      console.warn("GEMINI_API_KEY not configured, using mock evaluation");
       result = createMockEvaluation(evaluationRequest);
     }
 
