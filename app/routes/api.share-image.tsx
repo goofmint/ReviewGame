@@ -26,10 +26,11 @@ interface Env {
 /**
  * Request body structure for share image upload
  * Client sends base64-encoded image data
+ * Note: score may be sent as string from useFetcher
  */
 interface ShareImageRequest {
   imageData: string; // Base64-encoded PNG data
-  score: number;
+  score: number | string; // May be string from form submission
   language: string;
   level: string;
 }
@@ -123,11 +124,16 @@ export async function action({ request, context }: Route.ActionArgs) {
       );
     }
 
+    // Parse score (may be string from useFetcher)
+    const score =
+      typeof body.score === "string" ? parseInt(body.score, 10) : body.score;
+
     // Validate score
     if (
-      typeof body.score !== "number" ||
-      body.score < 0 ||
-      body.score > 100
+      typeof score !== "number" ||
+      isNaN(score) ||
+      score < 0 ||
+      score > 100
     ) {
       return Response.json(
         { error: "Score must be a number between 0 and 100" },
@@ -153,7 +159,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       if (process.env.NODE_ENV === "development") {
         const mockImageUrl = `https://example.com/share/${body.language}/${body.level}/${Date.now()}.png`;
         const tweetText = generateTweetText(
-          body.score,
+          score,
           body.language,
           body.level
         );
@@ -193,11 +199,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     const imageUrl = getPublicUrl(storageKey, publicUrl);
 
     // Generate tweet text and X intent URL
-    const tweetText = generateTweetText(
-      body.score,
-      body.language,
-      body.level
-    );
+    const tweetText = generateTweetText(score, body.language, body.level);
     const tweetUrl = generateXIntentUrl(tweetText, imageUrl);
 
     // Return result
