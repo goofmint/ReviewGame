@@ -18,6 +18,7 @@ import {
   oneLight,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useEffect, useState } from "react";
+import type { SyntaxHighlighterProps } from "react-syntax-highlighter";
 
 interface CodeDisplayProps {
   /** 表示するコード */
@@ -87,68 +88,57 @@ export function CodeDisplay({
 }: CodeDisplayProps) {
   const isDark = useDarkMode();
   const normalizedLanguage = normalizeLanguage(language);
-  const codeLines = code.split("\n");
+
+  /**
+   * 各行のプロパティを設定
+   * クリック可能にし、ホバー時のスタイルを適用
+   */
+  const getLineProps: SyntaxHighlighterProps["lineProps"] = (
+    lineNumber: number
+  ) => {
+    return {
+      style: {
+        cursor: "pointer",
+        display: "block",
+      },
+      onClick: () => onLineClick(lineNumber),
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onLineClick(lineNumber);
+        }
+      },
+      className: "hover:bg-yellow-100 dark:hover:bg-gray-700 transition-colors",
+      title: `クリックしてレビューに追加: ${lineNumber}行目`,
+      "aria-label": `${lineNumber}行目をレビューに追加`,
+      tabIndex: 0,
+      role: "button",
+    };
+  };
 
   return (
     <div className="bg-gray-50 dark:bg-gray-900 rounded-lg overflow-hidden">
-      <div className="relative">
-        {/* シンタックスハイライト表示（非インタラクティブ、背景として使用） */}
-        <div className="pointer-events-none">
-          <SyntaxHighlighter
-            language={normalizedLanguage}
-            style={isDark ? oneDark : oneLight}
-            showLineNumbers={false}
-            customStyle={{
-              margin: 0,
-              padding: "1rem",
-              background: "transparent",
-              fontSize: "0.875rem",
-            }}
-            lineProps={{
-              style: {
-                wordBreak: "break-word",
-                whiteSpace: "pre-wrap",
-              },
-            }}
-          >
-            {code}
-          </SyntaxHighlighter>
-        </div>
-
-        {/* クリック可能な行のオーバーレイ */}
-        <div className="absolute top-0 left-0 right-0 p-4">
-          {codeLines.map((line, index) => (
-            <button
-              type="button"
-              key={index}
-              className="flex w-full hover:bg-yellow-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors text-left focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-              onClick={() => onLineClick(index + 1)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onLineClick(index + 1);
-                }
-              }}
-              title={`クリックしてレビューに追加: ${index + 1}行目`}
-              aria-label={`${index + 1}行目をレビューに追加`}
-              style={{
-                // 行の高さをSyntaxHighlighterと合わせる
-                minHeight: "1.5rem",
-              }}
-            >
-              {/* 行番号 */}
-              <span className="select-none text-gray-400 dark:text-gray-600 w-10 text-right mr-4 flex-shrink-0">
-                {index + 1}
-              </span>
-
-              {/* 行の内容（透明テキスト、スペースを保持するため） */}
-              <span className="opacity-0 pointer-events-none text-sm font-mono">
-                {line || " "}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      <SyntaxHighlighter
+        language={normalizedLanguage}
+        style={isDark ? oneDark : oneLight}
+        showLineNumbers={true}
+        customStyle={{
+          margin: 0,
+          padding: "1rem",
+          background: "transparent",
+          fontSize: "0.875rem",
+        }}
+        lineNumberStyle={{
+          minWidth: "2.5em",
+          paddingRight: "1em",
+          color: isDark ? "#6b7280" : "#9ca3af",
+          userSelect: "none",
+        }}
+        wrapLines={true}
+        lineProps={getLineProps}
+      >
+        {code}
+      </SyntaxHighlighter>
     </div>
   );
 }
