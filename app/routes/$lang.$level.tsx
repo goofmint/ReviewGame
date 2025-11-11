@@ -159,52 +159,55 @@ export default function ProblemPage() {
         </header>
 
         <form onSubmit={handleSubmit}>
-          {/* Three-column layout for requirements, code, and review */}
+          {/* Two-column layout: requirements/code on left (2/3), review on right (1/3) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            {/* Requirements Section */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                <span className="text-2xl mr-2">📋</span>
-                要件
-              </h2>
-              <div className="prose dark:prose-invert max-w-none">
-                <pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-sans">
-                  {problem.requirements}
-                </pre>
+            {/* Left side: Requirements and Code stacked vertically (2/3 width) */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Requirements Section */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+                  <span className="text-2xl mr-2">📋</span>
+                  要件
+                </h2>
+                <div className="prose dark:prose-invert max-w-none">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300 font-sans">
+                    {problem.requirements}
+                  </pre>
+                </div>
+              </div>
+
+              {/* Code Section */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+                  <span className="text-2xl mr-2">💻</span>
+                  コード
+                </h2>
+                <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 overflow-x-auto">
+                  <pre className="text-sm">
+                    {codeLines.map((line: string, index: number) => (
+                      <div
+                        key={index}
+                        className="flex hover:bg-yellow-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                        onClick={() =>
+                          insertTemplate(`コードの${index + 1}行目: `)
+                        }
+                        title="クリックしてレビューに追加"
+                      >
+                        <span className="select-none text-gray-400 dark:text-gray-600 w-10 text-right mr-4">
+                          {index + 1}
+                        </span>
+                        <code className="text-gray-800 dark:text-gray-200">
+                          {line || " "}
+                        </code>
+                      </div>
+                    ))}
+                  </pre>
+                </div>
               </div>
             </div>
 
-            {/* Code Section */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                <span className="text-2xl mr-2">💻</span>
-                コード
-              </h2>
-              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 overflow-x-auto">
-                <pre className="text-sm">
-                  {codeLines.map((line: string, index: number) => (
-                    <div
-                      key={index}
-                      className="flex hover:bg-yellow-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
-                      onClick={() =>
-                        insertTemplate(`コードの${index + 1}行目: `)
-                      }
-                      title="クリックしてレビューに追加"
-                    >
-                      <span className="select-none text-gray-400 dark:text-gray-600 w-10 text-right mr-4">
-                        {index + 1}
-                      </span>
-                      <code className="text-gray-800 dark:text-gray-200">
-                        {line || " "}
-                      </code>
-                    </div>
-                  ))}
-                </pre>
-              </div>
-            </div>
-
-            {/* Review Input Section */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            {/* Right side: Review Input Section (1/3 width) */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 lg:sticky lg:top-8 lg:self-start">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                 <span className="text-2xl mr-2">✍️</span>
                 あなたのレビュー
@@ -215,7 +218,7 @@ export default function ProblemPage() {
                   setReview(e.target.value);
                   setError("");
                 }}
-                className="w-full h-64 p-4 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                className="w-full h-96 p-4 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                 placeholder="コードの問題点を指摘してください...&#10;&#10;例:&#10;- コードの5行目: 上限チェックがありません&#10;- 要件「150以下の整数」について: 型チェックが不足しています"
               />
               {error && (
