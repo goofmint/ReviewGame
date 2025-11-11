@@ -18,8 +18,8 @@ interface ResultState {
   score: number;
   passed: boolean;
   feedback: string;
-  strengths: string[];
-  improvements: string[];
+  strengths: string[] | undefined;
+  improvements: string[] | undefined;
 }
 
 export function meta({ params }: Route.MetaArgs) {
@@ -112,14 +112,14 @@ export default function ResultPage() {
           </div>
 
           {/* Strengths Section */}
-          {state.strengths.length > 0 && (
+          {(state.strengths || []).length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 mb-8">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                 <span className="text-3xl mr-3">👍</span>
                 良かった点
               </h2>
               <ul className="space-y-3">
-                {state.strengths.map((strength, index) => (
+                {(state.strengths || []).map((strength, index) => (
                   <li
                     key={index}
                     className="flex items-start text-gray-700 dark:text-gray-300"
@@ -133,14 +133,14 @@ export default function ResultPage() {
           )}
 
           {/* Improvements Section */}
-          {state.improvements.length > 0 && (
+          {(state.improvements || []).length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 mb-8">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                 <span className="text-3xl mr-3">💡</span>
                 改善点
               </h2>
               <ul className="space-y-3">
-                {state.improvements.map((improvement, index) => (
+                {(state.improvements || []).map((improvement, index) => (
                   <li
                     key={index}
                     className="flex items-start text-gray-700 dark:text-gray-300"
