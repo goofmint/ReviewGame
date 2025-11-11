@@ -1,8 +1,18 @@
+/**
+ * Problem Page Route
+ * Displays the code review problem with requirements, code, and review input
+ *
+ * Users can read the requirements, examine the code, and submit their review
+ * Upon submission, the review is sent to the LLM evaluation API
+ */
+
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { problems } from "~/data/problems";
 import { ErrorCard } from "~/components/ErrorCard";
+import { isLevelUnlocked } from "~/utils/progress";
 import type { Route } from "./+types/$lang.$level";
+import type { EvaluationResult } from "~/types/problem";
 
 export function meta({ params }: Route.MetaArgs) {
   return [
@@ -20,6 +30,7 @@ export default function ProblemPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Validate parameters and check if problem exists
   if (!lang || !level || !(lang in problems)) {
     return (
       <ErrorCard
@@ -43,33 +54,86 @@ export default function ProblemPage() {
     );
   }
 
+  // Check if level is unlocked (client-side check only, not security-critical)
+  const unlocked = isLevelUnlocked(lang, level);
+  if (!unlocked) {
+    return (
+      <ErrorCard
+        title="このレベルはまだロックされています"
+        linkTo={`/${lang}`}
+        linkText="レベル選択に戻る"
+      />
+    );
+  }
+
   const codeLines = problem.code.split("\n");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  /**
+   * Handles review submission
+   * Sends the review to the evaluation API and navigates to the result page
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate review content
     if (!review.trim()) {
       setError("レビューを入力してください");
+      return;
+    }
+
+    if (review.trim().length < 10) {
+      setError("レビューは10文字以上入力してください");
       return;
     }
 
     setError("");
     setIsSubmitting(true);
 
-    // MVP: 静的な結果を表示
-    // Phase 2でLLM評価を実装
-    setTimeout(() => {
+    try {
+      // Call the evaluation API
+      const response = await fetch("/api/evaluate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          language: lang,
+          level,
+          review: review.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json() as { error?: string };
+        throw new Error(errorData.error || "評価に失敗しました");
+      }
+
+      const result = (await response.json()) as EvaluationResult;
+
+      // Navigate to result page with the evaluation result
       navigate(`/${lang}/${level}/result`, {
         state: {
           review,
-          score: 0,
-          passed: false,
-          feedback: "MVP版では評価機能はまだ実装されていません。",
-          strengths: [],
-          improvements: [],
+          ...result,
         },
       });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "評価中にエラーが発生しました。もう一度お試しください。"
+      );
+    } finally {
       setIsSubmitting(false);
-    }, 500);
+    }
+  };
+
+  /**
+   * Inserts a template text into the review textarea
+   * Useful for helping users reference specific lines
+   */
+  const insertTemplate = (template: string) => {
+    setReview((prev) => (prev ? `${prev}\n${template}` : template));
   };
 
   return (
@@ -95,8 +159,9 @@ export default function ProblemPage() {
         </header>
 
         <form onSubmit={handleSubmit}>
+          {/* Three-column layout for requirements, code, and review */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            {/* 要件セクション */}
+            {/* Requirements Section */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                 <span className="text-2xl mr-2">📋</span>
@@ -109,7 +174,7 @@ export default function ProblemPage() {
               </div>
             </div>
 
-            {/* コードセクション */}
+            {/* Code Section */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                 <span className="text-2xl mr-2">💻</span>
@@ -120,13 +185,17 @@ export default function ProblemPage() {
                   {codeLines.map((line: string, index: number) => (
                     <div
                       key={index}
-                      className="flex hover:bg-yellow-50 dark:hover:bg-gray-700"
+                      className="flex hover:bg-yellow-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                      onClick={() =>
+                        insertTemplate(`コードの${index + 1}行目: `)
+                      }
+                      title="クリックしてレビューに追加"
                     >
                       <span className="select-none text-gray-400 dark:text-gray-600 w-10 text-right mr-4">
                         {index + 1}
                       </span>
                       <code className="text-gray-800 dark:text-gray-200">
-                        {line}
+                        {line || " "}
                       </code>
                     </div>
                   ))}
@@ -134,7 +203,7 @@ export default function ProblemPage() {
               </div>
             </div>
 
-            {/* レビュー入力セクション */}
+            {/* Review Input Section */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                 <span className="text-2xl mr-2">✍️</span>
@@ -159,12 +228,13 @@ export default function ProblemPage() {
                 disabled={isSubmitting || !review.trim()}
                 className="w-full mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold"
               >
-                {isSubmitting ? "送信中..." : "レビューを送信"}
+                {isSubmitting ? "評価中..." : "レビューを送信"}
               </button>
             </div>
           </div>
         </form>
 
+        {/* Hints Section */}
         <div className="max-w-4xl mx-auto mt-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
             💡 ヒント
@@ -174,6 +244,7 @@ export default function ProblemPage() {
             <li>エラーハンドリングは適切ですか？</li>
             <li>型チェックは必要ありませんか？</li>
             <li>境界値のテストは考慮されていますか？</li>
+            <li>コードの行をクリックすると、レビューに行番号を追加できます</li>
           </ul>
         </div>
       </div>

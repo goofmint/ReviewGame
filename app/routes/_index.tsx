@@ -1,5 +1,15 @@
+/**
+ * Language Selection Page (Home Page)
+ * The entry point of the application where users select a programming language
+ *
+ * Displays available languages with their icons and descriptions
+ * Provides instructions on how to play the game
+ */
+
 import { Link } from "react-router";
 import { availableLanguages } from "~/data/problems";
+import { LANGUAGE_DISPLAY_NAMES, LANGUAGE_DESCRIPTIONS, PASSING_SCORE } from "~/utils/constants";
+import { LanguageIcon } from "~/components/LanguageIcon";
 
 export default function Index() {
   return (
@@ -22,6 +32,9 @@ export default function Index() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {availableLanguages.map((lang) => {
                 const langStr = lang as string;
+                const displayName = LANGUAGE_DISPLAY_NAMES[langStr] || langStr;
+                const description = LANGUAGE_DESCRIPTIONS[langStr] || "";
+
                 return (
                   <Link
                     key={lang}
@@ -29,21 +42,18 @@ export default function Index() {
                     className="group block p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300"
                   >
                     <div className="text-center">
-                      <div className="text-6xl mb-4">
-                        {langStr === "javascript" && "🟨"}
-                        {langStr === "python" && "🐍"}
-                        {langStr === "flutter" && "🦋"}
+                      {/* Language Icon using Iconify */}
+                      <div className="mb-4 flex justify-center">
+                        <LanguageIcon
+                          language={langStr}
+                          className="w-16 h-16 text-blue-600 dark:text-blue-400"
+                        />
                       </div>
-                      <h3 className="text-2xl font-bold text-gray-900 dark:text-white capitalize mb-2">
-                        {langStr === "javascript" && "JavaScript"}
-                        {langStr === "python" && "Python"}
-                        {langStr === "flutter" && "Flutter"}
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                        {displayName}
                       </h3>
                       <p className="text-gray-600 dark:text-gray-400">
-                        {langStr === "javascript" &&
-                          "Web開発の基礎言語"}
-                        {langStr === "python" && "データ分析・AI開発"}
-                        {langStr === "flutter" && "モバイルアプリ開発"}
+                        {description}
                       </p>
                     </div>
                   </Link>
@@ -52,6 +62,7 @@ export default function Index() {
             </div>
           </section>
 
+          {/* How to Play Section */}
           <section className="mt-12 p-6 bg-white dark:bg-gray-800 rounded-xl shadow-md">
             <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">
               遊び方
@@ -62,7 +73,7 @@ export default function Index() {
               <li>コードと要件を確認</li>
               <li>問題点を見つけてレビューを書く</li>
               <li>AIによる評価を受けて得点獲得！</li>
-              <li>70点以上で次のレベルがアンロック</li>
+              <li>{PASSING_SCORE}点以上で次のレベルがアンロック</li>
             </ol>
           </section>
         </main>
