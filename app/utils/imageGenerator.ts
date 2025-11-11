@@ -57,28 +57,14 @@ export async function generateShareImage(
     throw new Error("Failed to get 2D context from canvas");
   }
 
-  // Get language-specific gradient or default
-  const gradient =
-    LANGUAGE_GRADIENTS[language.toLowerCase()] || DEFAULT_GRADIENT;
-
-  // Draw background gradient
-  const backgroundGradient = ctx.createLinearGradient(
-    0,
-    0,
-    IMAGE_WIDTH,
-    IMAGE_HEIGHT
-  );
-  backgroundGradient.addColorStop(0, gradient.start);
-  backgroundGradient.addColorStop(1, gradient.end);
-  ctx.fillStyle = backgroundGradient;
+  // Draw black background
+  ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
 
-  // Add passing score visual indicator (gold border for 70+)
-  if (score >= 70) {
-    ctx.strokeStyle = "#FFD700"; // Gold color
-    ctx.lineWidth = 10;
-    ctx.strokeRect(5, 5, IMAGE_WIDTH - 10, IMAGE_HEIGHT - 10);
-  }
+  // Add border with custom color #F1DCEE
+  ctx.strokeStyle = "#F1DCEE";
+  ctx.lineWidth = 10;
+  ctx.strokeRect(5, 5, IMAGE_WIDTH - 10, IMAGE_HEIGHT - 10);
 
   // Configure text rendering
   ctx.textAlign = "center";
