@@ -6,13 +6,15 @@
  * Upon submission, the review is sent to the LLM evaluation API
  */
 
-import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams, useFetcher } from "react-router";
 import { problems } from "~/data/problems";
 import { ErrorCard } from "~/components/ErrorCard";
 import { isLevelUnlocked } from "~/utils/progress";
 import type { Route } from "./+types/$lang.$level";
 import type { EvaluationResult } from "~/types/problem";
+import { evaluate } from "~/utils/evaluate";
+import type { EvaluationRequestBody } from "~/types/evaluate";
 
 export function meta({ params }: Route.MetaArgs) {
   return [
@@ -23,9 +25,34 @@ export function meta({ params }: Route.MetaArgs) {
   ];
 }
 
+export async function action({
+  request,
+  params,
+  context,
+}: {
+  request: Request;
+  params: { lang?: string; level?: string, review?: string };
+  context?: { cloudflare?: { env?: Record<string, unknown> } };
+}) {
+  if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+  const body = await request.json() as EvaluationRequestBody;
+  const { GEMINI_API_KEY } = context?.cloudflare?.env as { GEMINI_API_KEY: string };
+  try {
+    const result = await evaluate(body, { GEMINI_API_KEY });
+    console.log({ result });
+    return new Response(JSON.stringify(result), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (error) {
+    return new Response((error as Error).message, { status: 500 });
+  }
+}
+
+
 export default function ProblemPage() {
   const { lang, level } = useParams();
   const navigate = useNavigate();
+  const fetcher = useFetcher();
   const [review, setReview] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,34 +117,18 @@ export default function ProblemPage() {
     setIsSubmitting(true);
 
     try {
-      // Call the evaluation API
-      const response = await fetch("/api/evaluate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          language: lang,
-          level,
-          review: review.trim(),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json() as { error?: string };
-        throw new Error(errorData.error || "評価に失敗しました");
-      }
-
-      const result = (await response.json()) as EvaluationResult;
-
-      // Navigate to result page with the evaluation result
-      navigate(`/${lang}/${level}/result`, {
-        state: {
-          review,
-          ...result,
-        },
+      const body = {
+        language: String(lang),
+        level: String(level),
+        review: review.trim(),
+      };
+      fetcher.submit(body, {
+        method: "post",
+        action: `/${lang}/${level}`,
+        encType: "application/json",
       });
     } catch (err) {
+      console.log(err);
       setError(
         err instanceof Error
           ? err.message
@@ -127,6 +138,18 @@ export default function ProblemPage() {
       setIsSubmitting(false);
     }
   };
+  
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data) {
+      const result = fetcher.data as EvaluationResult;
+      navigate(`/${lang}/${level}/result`, {
+        state: {
+          review,
+          ...result,
+        },
+      });
+    }
+  }, [fetcher.state, fetcher.data]);
 
   /**
    * Inserts a template text into the review textarea
@@ -158,7 +181,7 @@ export default function ProblemPage() {
           </div>
         </header>
 
-        <form onSubmit={handleSubmit}>
+        <fetcher.Form method="post" onSubmit={handleSubmit}>
           {/* Two-column layout: requirements/code on left (2/3), review on right (1/3) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Left side: Requirements and Code stacked vertically (2/3 width) */}
@@ -235,7 +258,7 @@ export default function ProblemPage() {
               </button>
             </div>
           </div>
-        </form>
+        </fetcher.Form>
 
         {/* Hints Section */}
         <div className="max-w-4xl mx-auto mt-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl">

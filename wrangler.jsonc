@@ -8,7 +8,8 @@
 	"compatibility_date": "2025-04-04",
 	"main": "./workers/app.ts",
 	"vars": {
-		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
+		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare",
+		"GEMINI_API_KEY": "AIzaSyB04C_jD__IKfHaJp39jdS1Al4Xys68w9k"
 	},
 	"observability": {
 		"enabled": true

@@ -20,7 +20,7 @@ interface LanguageIconProps {
 const LANGUAGE_ICONS: Record<string, string> = {
   javascript: "mdi:language-javascript",
   python: "mdi:language-python",
-  flutter: "mdi:flutter",
+  flutter: "material-symbols:flutter",
 };
 
 /**
