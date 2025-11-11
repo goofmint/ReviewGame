@@ -12,6 +12,7 @@ import type { Route } from "./+types/$lang.$level.result";
 import { recordAttempt } from "~/utils/progress";
 import { problems } from "~/data/problems";
 import { PASSING_SCORE } from "~/utils/constants";
+import { ShareButton } from "~/components/ShareButton";
 
 interface ResultState {
   review: string;
@@ -161,6 +162,19 @@ export default function ResultPage() {
               </ul>
             </div>
           )}
+
+          {/* Share Section */}
+          <div className="text-center mb-8">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              結果をシェアしよう！
+            </h3>
+            <ShareButton
+              score={state.score}
+              language={lang}
+              level={level}
+              className="inline-block"
+            />
+          </div>
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
