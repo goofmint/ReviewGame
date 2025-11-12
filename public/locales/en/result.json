@@ -1,0 +1,10 @@
+{
+  "title": "Code Review Game - {{score}} points!",
+  "feedback": "Feedback",
+  "strengths": "Strengths",
+  "improvements": "Improvements",
+  "challenge": "Start Challenge",
+  "notFound": "Result not found",
+  "scoreLabel": "{{score}} points",
+  "languageLevel": "{{language}} - Level {{level}}"
+}
