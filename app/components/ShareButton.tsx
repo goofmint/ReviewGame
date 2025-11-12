@@ -22,6 +22,12 @@ interface ShareButtonProps {
   level: string;
   /** Locale (e.g., "ja", "en") */
   locale: string;
+  /** AI feedback text */
+  feedback: string;
+  /** List of strengths */
+  strengths: string[];
+  /** List of improvements */
+  improvements: string[];
   /** Additional CSS classes for styling */
   className?: string;
 }
@@ -34,14 +40,18 @@ type ShareState = "idle" | "generating" | "success" | "error";
 /**
  * ShareButton component that handles the entire share flow:
  * 1. Generate OG image using Canvas API (client-side)
- * 2. Share via Web Share API with image file
- * 3. Falls back to downloading image if Web Share API is not available
+ * 2. Upload image to R2 storage
+ * 3. Save result to KV storage
+ * 4. Open X share intent with result URL
  */
 export function ShareButton({
   score,
   language,
   level,
   locale,
+  feedback,
+  strengths,
+  improvements,
   className = "",
 }: ShareButtonProps) {
   // i18n translation hook
@@ -53,7 +63,7 @@ export function ShareButton({
 
   /**
    * Handles the share button click
-   * Generates image and shares via Web Share API
+   * Generates image, uploads to R2, saves to KV, and opens X share intent
    */
   const handleShare = async () => {
     try {
@@ -65,58 +75,82 @@ export function ShareButton({
       const languageDisplayName = t(`common:language.${language}`, language);
       const imageBlob = await generateShareImage(score, language, level, locale, languageDisplayName);
 
-      // Step 2: Create share text
-      const shareText = locale === 'ja'
-        ? `#CodeRabbit コードレビューゲームで${score}点を獲得しました！\n言語: ${languageDisplayName} | レベル: ${level}`
-        : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName} | Level: ${level}`;
+      // Step 2: Convert image to base64 for upload
+      const reader = new FileReader();
+      const imageBase64 = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          if (typeof reader.result === "string") {
+            resolve(reader.result);
+          } else {
+            reject(new Error("Failed to convert image to base64"));
+          }
+        };
+        reader.onerror = () => reject(new Error("FileReader error"));
+        reader.readAsDataURL(imageBlob);
+      });
 
-      // Step 3: Create file from blob
-      const fileName = `code-review-game-${language}-level${level}-${score}pts.png`;
-      const imageFile = blobToFile(imageBlob, fileName);
+      // Step 3: Upload image to R2
+      const uploadResponse = await fetch(`/${locale}/${language}/${level}/result`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imageData: imageBase64,
+          score,
+          language,
+          level,
+          locale,
+        }),
+      });
 
-      // Step 4: Check if Web Share API is available and supports files
-      if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
-        // Use Web Share API
-        await navigator.share({
-          title: t('common:language.codeReviewGame', 'Code Review Game'),
-          text: shareText,
-          files: [imageFile],
-        });
-
-        setShareState("success");
-
-        // Reset state after success
-        setTimeout(() => {
-          setShareState("idle");
-        }, 3000);
-      } else {
-        // Fallback: Download the image
-        const url = URL.createObjectURL(imageBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        setShareState("success");
-        setShareError(t('share:button.downloadFallback', 'Web Share not supported. Image downloaded.'));
-
-        setTimeout(() => {
-          setShareState("idle");
-          setShareError("");
-        }, 5000);
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload image");
       }
+
+      const uploadResult = await uploadResponse.json() as { imageUrl: string };
+
+      // Step 4: Save result to KV
+      const saveResponse = await fetch("/api/results/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          score,
+          language,
+          level,
+          feedback,
+          strengths,
+          improvements,
+          imageUrl: uploadResult.imageUrl,
+          locale,
+        }),
+      });
+
+      if (!saveResponse.ok) {
+        throw new Error("Failed to save result");
+      }
+
+      const saveResult = await saveResponse.json() as { url: string };
+
+      // Step 5: Generate X share text
+      const shareText = locale === 'ja'
+        ? `コードレビューゲーム powered by #CodeRabbit にて ${score}点を獲得しました！\n言語: ${languageDisplayName}\nレベル: ${level}\n\n${saveResult.url}`
+        : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName}\nLevel: ${level}\n\n${saveResult.url}`;
+
+      // Step 6: Open X share intent
+      const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+      window.open(tweetUrl, "_blank", "noopener,noreferrer");
+
+      setShareState("success");
+
+      // Reset state after success
+      setTimeout(() => {
+        setShareState("idle");
+      }, 3000);
     } catch (error) {
       console.error("Share error:", error);
-
-      // Check if user cancelled the share
-      if (error instanceof Error && error.name === 'AbortError') {
-        // User cancelled, just reset to idle
-        setShareState("idle");
-        return;
-      }
 
       setShareState("error");
       setShareError(

@@ -355,6 +355,9 @@ export default function ResultPage() {
               language={lang}
               level={level}
               locale={locale}
+              feedback={state.feedback}
+              strengths={state.strengths || []}
+              improvements={state.improvements || []}
               className="inline-block"
             />
           </div>

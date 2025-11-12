@@ -43,3 +43,33 @@ export interface ShareResult {
   tweetText: string;
   tweetUrl: string;
 }
+
+export interface SavedResult {
+  id: string;
+  score: number;
+  language: string;
+  level: number;
+  feedback: string;
+  strengths: string[];
+  improvements: string[];
+  imageUrl: string;
+  createdAt: number;
+  locale: string;
+}
+
+export interface SaveResultRequest {
+  score: number;
+  language: string;
+  level: string;
+  feedback: string;
+  strengths: string[];
+  improvements: string[];
+  imageUrl: string;
+  locale: string;
+}
+
+export interface SaveResultResponse {
+  id: string;
+  url: string;
+  imageUrl: string;
+}

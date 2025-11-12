@@ -11,6 +11,7 @@
     "backToLanguages": "言語選択に戻る",
     "backToLevels": "レベル選択に戻る"
   },
+  "tryChallenge": "挑戦する",
   "language": {
     "javascript": "JavaScript",
     "python": "Python",
