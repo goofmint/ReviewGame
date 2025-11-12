@@ -46,7 +46,7 @@ export async function generateShareImage(
   if (typeof window === "undefined" || typeof document === "undefined") {
     throw new Error("Canvas API is only available in browser environment");
   }
-
+  console.log("Generating share image for", language, "level", level, "score", score);
   // Create canvas element
   const canvas = document.createElement("canvas");
   canvas.width = IMAGE_WIDTH;
@@ -56,7 +56,7 @@ export async function generateShareImage(
   if (!ctx) {
     throw new Error("Failed to get 2D context from canvas");
   }
-
+  
   // Draw black background
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
@@ -69,14 +69,15 @@ export async function generateShareImage(
   // Configure text rendering
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "white";
+  ctx.fillStyle = "#D65D2D";
 
   // Draw title
   ctx.font = "bold 48px sans-serif";
-  ctx.fillText("Code Review Game", IMAGE_WIDTH / 2, 80);
+  ctx.fillText("Code Review Game by CodeRabbit", IMAGE_WIDTH / 2, 80);
 
   // Draw score (large and prominent)
   ctx.font = "bold 120px sans-serif";
+  ctx.fillStyle = "white";
   ctx.fillText(`${score}点`, IMAGE_WIDTH / 2, 250);
 
   // Draw language and level info
@@ -88,12 +89,13 @@ export async function generateShareImage(
   ctx.fillText(`${displayName} - Level ${level}`, IMAGE_WIDTH / 2, 380);
 
   // Load and draw CodeRabbit icon
+  console.log("Loading CodeRabbit icon...");
   try {
     const iconImage = await loadImage("/images/coderabbit-icon.png");
     const iconSize = 80;
     const iconX = 1100;
     const iconY = 530;
-
+    console.log("Drawing CodeRabbit icon at", iconX, iconY);
     ctx.drawImage(iconImage, iconX, iconY, iconSize, iconSize);
   } catch (error) {
     // Fallback to text if icon fails to load

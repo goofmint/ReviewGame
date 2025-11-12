@@ -7,13 +7,10 @@
 	"name": "review-game",
 	"compatibility_date": "2025-04-04",
 	"main": "./workers/app.ts",
-	"vars": {
-		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare",
-		"R2_PUBLIC_URL": "https://share.review-game.example.com"
-	},
 	"observability": {
 		"enabled": true
 	},
+	"account_id": "403e9b4430b9dac97e7a5828010258d2",
 	/**
 	 * R2 Buckets
 	 * Storage for share images

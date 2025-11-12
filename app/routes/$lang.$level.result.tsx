@@ -76,6 +76,7 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
  */
 export async function action({ request, context }: Route.ActionArgs) {
   try {
+    console.log("Received share image upload request");
     // Check content type
     const contentType = request.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
@@ -87,7 +88,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 
     // Parse request body
     const body = (await request.json()) as ShareImageRequest;
-
     // Validate required fields
     if (!body.imageData || !body.language || !body.level) {
       return Response.json(
@@ -112,37 +112,9 @@ export async function action({ request, context }: Route.ActionArgs) {
         { status: 400 }
       );
     }
-
     // Get R2 bucket from context (Cloudflare Workers binding)
     const env = context.cloudflare?.env as Env | undefined;
     const bucket = env?.SHARE_IMAGES;
-
-    if (!bucket) {
-      // In development/testing, return a mock response
-      if (process.env.NODE_ENV === "development") {
-        const mockImageUrl = `https://example.com/share/${body.language}/${body.level}/${Date.now()}.png`;
-        const tweetText = generateTweetText(
-          score,
-          body.language,
-          body.level
-        );
-        const tweetUrl = generateXIntentUrl(tweetText, mockImageUrl);
-
-        const result: ShareResult = {
-          imageUrl: mockImageUrl,
-          tweetText,
-          tweetUrl,
-        };
-
-        return Response.json(result);
-      }
-
-      return Response.json(
-        { error: "R2 bucket not configured" },
-        { status: 500 }
-      );
-    }
-
     // Convert base64 to ArrayBuffer
     const imageBuffer = base64ToArrayBuffer(body.imageData);
 
@@ -155,7 +127,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     );
 
     // Upload to R2
-    await uploadImageToR2(bucket, storageKey, imageBuffer);
+    await uploadImageToR2(bucket!, storageKey, imageBuffer);
 
     // Get public URL
     const publicUrl = env?.R2_PUBLIC_URL || "https://share.example.com";

@@ -10,7 +10,7 @@ import { LANGUAGE_DISPLAY_NAMES } from "./constants";
  * Base URL for the game
  * This should be configured via environment variables in production
  */
-const GAME_URL = "https://review-game.example.com";
+const GAME_URL = "https://review-game.goofmint.workers.dev";
 
 /**
  * Generates the tweet text for sharing a game result
