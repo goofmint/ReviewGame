@@ -1,5 +1,7 @@
 import { RemixI18Next } from 'remix-i18next/server';
 import { createCookie } from 'react-router';
+import Backend from 'i18next-fs-backend';
+import { resolve } from 'node:path';
 
 // Cookie for storing user's locale preference
 export const localeCookie = createCookie('locale', {
@@ -19,7 +21,8 @@ export const i18n = new RemixI18Next({
     defaultNS: 'common',
     ns: ['common', 'game', 'feedback', 'share', 'result'],
   },
+  plugins: [Backend],
   backend: {
-    loadPath: './public/locales/{{lng}}/{{ns}}.json',
+    loadPath: resolve('./public/locales/{{lng}}/{{ns}}.json'),
   },
 });
