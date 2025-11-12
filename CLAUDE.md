@@ -131,10 +131,10 @@ ReviewGame/
 │   │   ├── _index.tsx           # 言語選択画面
 │   │   ├── $lang._index.tsx     # レベル選択画面
 │   │   ├── $lang.$level.tsx     # 問題表示・レビュー画面
-│   │   ├── result.$id.tsx       # 保存された結果表示ページ
+│   │   ├── result.$id.tsx       # 保存された結果表示ページ (Phase 5)
 │   │   ├── api.evaluate.tsx     # レビュー評価API
 │   │   ├── api.share-image.tsx  # シェア画像生成API
-│   │   └── api.save-result.tsx  # 結果保存API
+│   │   └── api.save-result.tsx  # 結果保存API (Phase 5)
 │   ├── components/
 │   │   ├── LanguageSelector.tsx
 │   │   ├── LevelSelector.tsx
@@ -170,6 +170,8 @@ ReviewGame/
 │       └── level3.md
 ├── scripts/
 │   └── build-problems.ts       # ビルド時にMarkdown→TSに変換
+├── tasks/                      # 詳細設計ドキュメント
+│   └── phase5-result-persistence.md  # Phase 5詳細設計
 ├── public/
 │   └── images/
 │       └── coderabbit-icon.png  # CodeRabbitアイコン
@@ -371,22 +373,9 @@ interface SavedResult {
   timestamp: number;        // UNIX timestamp（ミリ秒）
   createdAt: string;        // ISO 8601形式の日時
 }
-
-interface SaveResultRequest {
-  score: number;
-  language: string;
-  level: number;
-  feedback: string;
-  strengths: string[];
-  improvements: string[];
-  imageUrl: string;
-}
-
-interface SaveResultResponse {
-  resultId: string;         // 生成されたUUID
-  resultUrl: string;        // 結果ページのURL（例：https://review-game.com/result/uuid）
-}
 ```
+
+**詳細**: `tasks/phase5-result-persistence.md` の「データ構造」セクション参照
 
 ## 6. 主要機能の実装フロー
 
@@ -486,68 +475,6 @@ interface SaveResultResponse {
    ```
 8. クライアントに `{ imageUrl, tweetText, tweetUrl }` を返却
 9. クライアントで新しいタブを開いてtweetUrlにアクセス
-
-### 6.5 結果保存と表示フロー（Phase 5）
-
-**結果保存フロー**:
-1. ユーザーがレビューを送信し、評価結果を取得
-2. 結果画面で「Xでシェア」をクリック
-3. `/api/share-image` で画像を生成してR2にアップロード
-4. 同時に `/api/save-result` にPOSTリクエスト:
-   ```typescript
-   {
-     score: 85,
-     language: "javascript",
-     level: 1,
-     feedback: "全体的によくできています...",
-     strengths: ["上限チェックの指摘が正確"],
-     improvements: ["型チェックの説明を詳しく"],
-     imageUrl: "https://r2.example.com/share/javascript/1/12345.png"
-   }
-   ```
-5. サーバー側で処理:
-   - UUID v4を生成（例：`a1b2c3d4-e5f6-7890-abcd-ef1234567890`）
-   - タイムスタンプを記録
-   - SavedResult型のデータを作成
-   - Cloudflare KVに保存:
-     - キー: UUIDをそのまま使用（`${uuid}`）
-     - 値: JSON.stringify(savedResult)
-     - 有効期限: なし（永続保存）
-6. レスポンスを返却:
-   ```typescript
-   {
-     resultId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-     resultUrl: "https://review-game.com/result/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-   }
-   ```
-7. ツイートテキストに結果URLを含めてXシェア
-
-**結果表示フロー**:
-1. ユーザーが `/result/{id}` にアクセス（idはUUID）
-2. サーバー側（loader）で処理:
-   - KVから `${id}` をキーとして取得
-   - データが存在しない場合は404
-   - SavedResult型のデータをパース
-3. metaタグを動的に設定:
-   ```typescript
-   export const meta: MetaFunction = ({ data }) => {
-     return [
-       { title: `Code Review Game - ${data.score}点獲得！` },
-       { property: "og:title", content: `Code Review Game - ${data.score}点獲得！` },
-       { property: "og:description", content: `${data.language} Level ${data.level}でスコア${data.score}点を獲得しました` },
-       { property: "og:image", content: data.imageUrl },
-       { property: "og:url", content: `https://review-game.com/result/${data.id}` },
-       { name: "twitter:card", content: "summary_large_image" },
-       { name: "twitter:image", content: data.imageUrl }
-     ];
-   };
-   ```
-4. UIコンポーネントをレンダリング:
-   - スコア表示
-   - フィードバック表示
-   - strengths/improvementsリスト
-   - 「挑戦する」ボタン（トップページへのLink）
-5. SNSでシェアされた場合、OG画像が表示される
 
 ## 7. 状態管理
 
@@ -665,52 +592,13 @@ preview_bucket_name = "review-game-share-images-preview"
 4. シェア機能の拡張（他のSNS対応）
 
 ### Phase 5: レビュー結果の永続化とシェア機能の強化
-1. **結果保存機能**：
-   - レビュー評価結果をCloudflare KVに永続化（有効期限なし）
-   - 各結果にユニークなID（UUID v4）を割り当て
-   - UUIDをそのままURLパスとKVキーに使用
-   - 結果データには以下を含む：
-     - スコア、言語、レベル
-     - LLMフィードバック、strengths、improvements
-     - 生成されたOG画像のURL
-     - タイムスタンプ
-   - 個人情報は一切含まない（ゲームの評価結果のみ）
-2. **結果保存API**：
-   - `/api/save-result` エンドポイントを実装
-   - リクエスト: `{ score, language, level, feedback, strengths, improvements, imageUrl }`
-   - レスポンス: `{ resultId, resultUrl }`
-3. **永続化された結果表示ページ**：
-   - URL: `/result/{resultId}`
-   - 保存された結果データを表示
-   - シンプルなUI（評価結果のみを表示）
-   - 含むUI要素：
-     - スコア表示
-     - LLMフィードバック
-     - 良かった点（strengths）
-     - 改善点（improvements）
-     - 「挑戦する」リンク（トップページへ遷移）
-   - 除外するUI要素：
-     - Next Level、Try Again ボタン
-     - Share your result!、Shareボタン
-     - Back to Level Selection、Back to Language Selection ボタン
-4. **OGP対応**：
-   - 結果ページに動的なOGPタグを設定
-   - `og:image`: 生成された画像のR2 URL
-   - `og:title`: "Code Review Game - {score}点獲得！"
-   - `og:description`: "{language} Level {level}でスコア{score}点を獲得しました"
-   - `og:url`: 結果ページのURL
-   - `twitter:card`: "summary_large_image"
-5. **シェア機能との連携**：
-   - 既存のシェア機能を拡張
-   - シェア画像生成時に結果を自動保存
-   - Xシェア時のURLを結果ページのURLに変更
-   - ツイートテキストを更新：
-     ```
-     #CodeRabbit コードレビューゲームで{score}点を獲得しました！
-     言語: {language} | レベル: {level}
+1. **結果保存機能**：Cloudflare KVにレビュー結果を永続保存（UUID v4ベースのユニークURL）
+2. **結果表示ページ**：`/result/{uuid}` でシンプルな結果表示（「挑戦する」リンクのみ）
+3. **OGP対応**：SNSシェア時に画像とメタ情報を表示
+4. **国際化対応**：結果ページの多言語対応（日本語・英語）
+5. **シェア機能連携**：Xシェア時に結果ページのURLを使用
 
-     {resultPageURL}
-     ```
+**詳細設計**: `tasks/phase5-result-persistence.md` を参照
 
 ## 11. セキュリティ考慮事項
 
@@ -723,14 +611,11 @@ preview_bucket_name = "review-game-share-images-preview"
   - ファイル名のサニタイゼーション
   - 画像サイズの制限（最大5MB程度）
   - 不正なパラメータのバリデーション
-- **Phase 5: 結果保存のセキュリティ**：
-  - 個人情報は一切含まない（ゲームの評価結果のみ）
-  - UUID v4の適切な生成（推測不可能性）
-  - KV書き込み時のデータバリデーション
-  - 保存データのサイズ制限（最大10KB程度）
-  - XSS対策：フィードバックテキストのサニタイゼーション
-  - 不正なUUIDアクセスの防止（正規表現での検証）
-  - データは永続保存（有効期限なし）
+- **Phase 5: 結果保存**：
+  - 個人情報は一切保存しない
+  - UUID v4による推測不可能なURL
+  - 入力値のバリデーション
+  - データサイズ制限（最大10KB）
 
 ## 12. パフォーマンス最適化
 
@@ -861,282 +746,3 @@ preview_bucket_name = "review-game-share-images-preview"
   ]
 }
 ```
-
----
-
-## 付録C: Phase 5 結果保存APIの詳細仕様
-
-### C.1 結果保存API (`/api/save-result`)
-
-**エンドポイント**: `POST /api/save-result`
-
-**リクエストボディ**:
-```typescript
-{
-  score: number;           // 0-100の整数
-  language: string;        // "javascript" | "python" | "flutter"
-  level: number;           // 1以上の整数
-  feedback: string;        // 最大5000文字
-  strengths: string[];     // 配列、各要素最大500文字
-  improvements: string[];  // 配列、各要素最大500文字
-  imageUrl: string;        // R2画像のURL（HTTPSのみ）
-}
-```
-
-**バリデーション**:
-- `score`: 0〜100の整数
-- `language`: 許可されたリスト（problems.tsから取得）
-- `level`: 1以上の整数
-- `feedback`: 空でない文字列、5000文字以内
-- `strengths`: 配列、1〜10要素、各要素500文字以内
-- `improvements`: 配列、1〜10要素、各要素500文字以内
-- `imageUrl`: 有効なHTTPS URL、R2ドメインのみ許可
-
-**成功レスポンス** (200):
-```typescript
-{
-  success: true;
-  resultId: string;        // UUID v4
-  resultUrl: string;       // 完全なURL
-}
-```
-
-**エラーレスポンス**:
-- 400 Bad Request: バリデーションエラー
-- 500 Internal Server Error: KV書き込みエラー
-
-**実装例**:
-```typescript
-// app/routes/api.save-result.tsx
-import { json } from '@remix-run/cloudflare';
-import type { ActionFunctionArgs } from '@remix-run/cloudflare';
-import { v4 as uuidv4 } from 'uuid';
-
-export async function action({ request, context }: ActionFunctionArgs) {
-  const body = await request.json();
-
-  // バリデーション
-  if (!isValidSaveResultRequest(body)) {
-    return json({ error: 'Invalid request' }, { status: 400 });
-  }
-
-  // UUIDを生成
-  const resultId = uuidv4();
-
-  // SavedResultを作成
-  const savedResult: SavedResult = {
-    id: resultId,
-    score: body.score,
-    language: body.language,
-    level: body.level,
-    feedback: body.feedback,
-    strengths: body.strengths,
-    improvements: body.improvements,
-    imageUrl: body.imageUrl,
-    timestamp: Date.now(),
-    createdAt: new Date().toISOString()
-  };
-
-  // KVに保存（UUIDをキーとして直接使用、有効期限なし）
-  const RESULTS_KV = context.env.RESULTS_KV as KVNamespace;
-  await RESULTS_KV.put(resultId, JSON.stringify(savedResult));
-
-  // レスポンスを返却
-  const baseUrl = new URL(request.url).origin;
-  return json({
-    success: true,
-    resultId,
-    resultUrl: `${baseUrl}/result/${resultId}`
-  });
-}
-```
-
-### C.2 結果表示ページ (`/result/$id`)
-
-**エンドポイント**: `GET /result/:id`
-
-**URLパラメータ**:
-- `id`: UUID v4形式の文字列
-
-**Loader実装例**:
-```typescript
-// app/routes/result.$id.tsx
-import type { LoaderFunctionArgs, MetaFunction } from '@remix-run/cloudflare';
-import { json } from '@remix-run/cloudflare';
-import { useLoaderData, Link } from '@remix-run/react';
-
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export async function loader({ params, context }: LoaderFunctionArgs) {
-  const { id } = params;
-
-  // UUIDのバリデーション
-  if (!id || !UUID_REGEX.test(id)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  // KVから結果を取得（UUIDをキーとして直接使用）
-  const RESULTS_KV = context.env.RESULTS_KV as KVNamespace;
-  const resultJson = await RESULTS_KV.get(id);
-
-  if (!resultJson) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  const result: SavedResult = JSON.parse(resultJson);
-  return json(result);
-}
-
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
-  if (!data) {
-    return [{ title: 'Result Not Found' }];
-  }
-
-  return [
-    { title: `Code Review Game - ${data.score}点獲得！` },
-    { property: 'og:title', content: `Code Review Game - ${data.score}点獲得！` },
-    { property: 'og:description', content: `${data.language} Level ${data.level}でスコア${data.score}点を獲得しました` },
-    { property: 'og:image', content: data.imageUrl },
-    { property: 'og:url', content: `https://review-game.com/result/${data.id}` },
-    { property: 'og:type', content: 'website' },
-    { name: 'twitter:card', content: 'summary_large_image' },
-    { name: 'twitter:image', content: data.imageUrl },
-    { name: 'twitter:title', content: `Code Review Game - ${data.score}点獲得！` },
-    { name: 'twitter:description', content: `${data.language} Level ${data.level}でスコア${data.score}点を獲得` }
-  ];
-};
-
-export default function ResultPage() {
-  const result = useLoaderData<typeof loader>();
-
-  return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-lg p-8">
-        {/* スコア表示 */}
-        <div className="text-center mb-8">
-          <h1 className="text-6xl font-bold text-blue-600 mb-2">
-            {result.score}点
-          </h1>
-          <p className="text-xl text-gray-600">
-            {result.language} - Level {result.level}
-          </p>
-        </div>
-
-        {/* フィードバック */}
-        <div className="mb-6">
-          <h2 className="text-2xl font-semibold mb-3">フィードバック</h2>
-          <p className="text-gray-700 leading-relaxed">{result.feedback}</p>
-        </div>
-
-        {/* 良かった点 */}
-        {result.strengths.length > 0 && (
-          <div className="mb-6">
-            <h3 className="text-xl font-semibold mb-3 text-green-600">
-              良かった点
-            </h3>
-            <ul className="list-disc list-inside space-y-2">
-              {result.strengths.map((strength, i) => (
-                <li key={i} className="text-gray-700">{strength}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* 改善点 */}
-        {result.improvements.length > 0 && (
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold mb-3 text-orange-600">
-              改善点
-            </h3>
-            <ul className="list-disc list-inside space-y-2">
-              {result.improvements.map((improvement, i) => (
-                <li key={i} className="text-gray-700">{improvement}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* 挑戦するボタン */}
-        <div className="text-center">
-          <Link
-            to="/"
-            className="inline-block bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            挑戦する
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-```
-
-### C.3 KV操作のベストプラクティス
-
-**キーの命名規則**:
-- UUIDをそのままキーとして使用
-- プレフィックスなし
-- 例: `a1b2c3d4-e5f6-7890-abcd-ef1234567890`
-
-**保存時の設定**:
-```typescript
-// 有効期限なし（永続保存）
-await RESULTS_KV.put(uuid, JSON.stringify(data));
-```
-
-**エラーハンドリング**:
-```typescript
-try {
-  await RESULTS_KV.put(uuid, value);
-} catch (error) {
-  console.error('KV put error:', error);
-  return json({ error: 'Failed to save result' }, { status: 500 });
-}
-```
-
-**読み取りのキャッシング**:
-```typescript
-// Cloudflare Workers KVは自動的にエッジでキャッシュされる
-// 追加のキャッシング設定は通常不要
-const value = await RESULTS_KV.get(uuid);
-```
-
-### C.4 国際化対応（i18n）
-
-**結果ページの多言語対応**:
-- 既存のi18n設定を活用（`app/i18n.ts`）
-- 結果ページのUIテキストを翻訳
-- ブラウザの言語設定に応じて表示言語を切り替え
-
-**翻訳が必要な要素**:
-```typescript
-// app/locales/ja.ts
-export default {
-  result: {
-    title: "Code Review Game - {score}点獲得！",
-    score: "{score}点",
-    feedback: "フィードバック",
-    strengths: "良かった点",
-    improvements: "改善点",
-    challenge: "挑戦する",
-    notFound: "結果が見つかりませんでした"
-  }
-}
-
-// app/locales/en.ts
-export default {
-  result: {
-    title: "Code Review Game - {score} points!",
-    score: "{score} points",
-    feedback: "Feedback",
-    strengths: "Strengths",
-    improvements: "Improvements",
-    challenge: "Start Challenge",
-    notFound: "Result not found"
-  }
-}
-```
-
-**OGPタグの国際化**:
-- OGPタグは常に日本語で固定（シェア先が主に日本のユーザー想定）
-- または、ユーザーの言語設定に応じて動的に生成
