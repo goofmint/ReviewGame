@@ -7,12 +7,22 @@
 	"name": "review-game",
 	"compatibility_date": "2025-04-04",
 	"main": "./workers/app.ts",
-	"vars": {
-		"VALUE_FROM_CLOUDFLARE": "Hello from Cloudflare"
-	},
 	"observability": {
 		"enabled": true
-	}
+	},
+	"account_id": "403e9b4430b9dac97e7a5828010258d2",
+	/**
+	 * R2 Buckets
+	 * Storage for share images
+	 * https://developers.cloudflare.com/r2/
+	 */
+	"r2_buckets": [
+		{
+			"binding": "SHARE_IMAGES",
+			"bucket_name": "review-game-share-images",
+			"preview_bucket_name": "review-game-share-images-preview"
+		}
+	]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
