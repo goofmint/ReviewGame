@@ -1,129 +1,178 @@
 /**
- * ShareButton Component
- * Provides social media sharing functionality using Web Share API
- * Generates share image and shares via native share dialog
- * Falls back to X Web Intent if Web Share API is not available
+ * ShareButton Component (Enhanced)
+ *
+ * Enhanced with result persistence:
+ * 1. Generate/upload share image
+ * 2. Save result to KV (useFetcher)
+ * 3. Share with result URL
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useFetcher } from "react-router";
 import { Icon } from "@iconify/react";
 import { generateShareImage, blobToFile } from "~/utils/imageGenerator";
+import type { SaveResultResponse } from "~/types/result";
 
 /**
- * Props for ShareButton component
+ * Props for ShareButton
+ *
+ * Now includes evaluation result data for persistence
  */
-interface ShareButtonProps {
+export interface ShareButtonProps {
   /** Score achieved (0-100) */
   score: number;
-  /** Programming language ID (e.g., "javascript") */
+
+  /** Programming language ID */
   language: string;
+
   /** Level number */
   level: string;
-  /** Locale (e.g., "ja", "en") */
+
+  /** Current locale (ja | en) */
   locale: string;
-  /** Additional CSS classes for styling */
+
+  /** LLM feedback text */
+  feedback: string;
+
+  /** Strengths array */
+  strengths: string[];
+
+  /** Improvements array */
+  improvements: string[];
+
+  /** Optional: Image URL if already generated/uploaded */
+  imageUrl?: string;
+
+  /** Additional CSS classes */
   className?: string;
 }
 
-/**
- * Client-side states for sharing
- */
-type ShareState = "idle" | "generating" | "success" | "error";
+type ShareState = "idle" | "generating" | "saving" | "success" | "error";
 
 /**
- * ShareButton component that handles the entire share flow:
- * 1. Generate OG image using Canvas API (client-side)
- * 2. Share via Web Share API with image file
- * 3. Falls back to downloading image if Web Share API is not available
+ * Enhanced ShareButton with result persistence
+ *
+ * Flow:
+ * 1. Generate image (client-side)
+ * 2. Save result to KV via useFetcher (gets result URL)
+ * 3. Share via Web Share API with result URL in text
  */
 export function ShareButton({
   score,
   language,
   level,
   locale,
+  feedback,
+  strengths,
+  improvements,
+  imageUrl: providedImageUrl,
   className = "",
 }: ShareButtonProps) {
-  // i18n translation hook
-  const { t } = useTranslation(['share', 'common']);
+  const { t } = useTranslation(["share", "common"]);
+  const fetcher = useFetcher<SaveResultResponse>();
 
-  // Client-side sharing state
   const [shareState, setShareState] = useState<ShareState>("idle");
   const [shareError, setShareError] = useState<string>("");
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string>("");
+
+  // Monitor fetcher state for result saving
+  useEffect(() => {
+    if (fetcher.state === "loading" || fetcher.state === "submitting") {
+      setShareState("saving");
+    } else if (fetcher.data?.success && generatedImageUrl) {
+      // Result saved successfully, proceed to share
+      handleShareWithResultUrl(fetcher.data.resultUrl, generatedImageUrl);
+    } else if (fetcher.data && !fetcher.data.success) {
+      setShareState("error");
+      setShareError(t("share:button.error", "Failed to save result"));
+      setTimeout(() => {
+        setShareState("idle");
+        setShareError("");
+      }, 5000);
+    }
+  }, [fetcher.state, fetcher.data, generatedImageUrl]);
 
   /**
-   * Handles the share button click
-   * Generates image and shares via Web Share API
+   * Handle share button click
+   * Full flow: Generate image → Upload to R2 → Save to KV → Share on X
    */
   const handleShare = async () => {
     try {
-      // Reset error state
       setShareError("");
       setShareState("generating");
 
-      // Step 1: Generate image (client-side)
-      const languageDisplayName = t(`common:language.${language}`, language);
-      const imageBlob = await generateShareImage(score, language, level, locale, languageDisplayName);
-
-      // Step 2: Create share text
-      const shareText = locale === 'ja'
-        ? `#CodeRabbit コードレビューゲームで${score}点を獲得しました！\n言語: ${languageDisplayName} | レベル: ${level}`
-        : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName} | Level: ${level}`;
-
-      // Step 3: Create file from blob
-      const fileName = `code-review-game-${language}-level${level}-${score}pts.png`;
-      const imageFile = blobToFile(imageBlob, fileName);
-
-      // Step 4: Check if Web Share API is available and supports files
-      if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
-        // Use Web Share API
-        await navigator.share({
-          title: t('common:language.codeReviewGame', 'Code Review Game'),
-          text: shareText,
-          files: [imageFile],
-        });
-
-        setShareState("success");
-
-        // Reset state after success
-        setTimeout(() => {
-          setShareState("idle");
-        }, 3000);
-      } else {
-        // Fallback: Download the image
-        const url = URL.createObjectURL(imageBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        setShareState("success");
-        setShareError(t('share:button.downloadFallback', 'Web Share not supported. Image downloaded.'));
-
-        setTimeout(() => {
-          setShareState("idle");
-          setShareError("");
-        }, 5000);
-      }
-    } catch (error) {
-      console.error("Share error:", error);
-
-      // Check if user cancelled the share
-      if (error instanceof Error && error.name === 'AbortError') {
-        // User cancelled, just reset to idle
-        setShareState("idle");
+      // If imageUrl is provided, skip generation and upload
+      if (providedImageUrl) {
+        setGeneratedImageUrl(providedImageUrl);
+        saveResultToKV(providedImageUrl);
         return;
       }
 
-      setShareState("error");
-      setShareError(
-        error instanceof Error ? error.message : t('share:button.error', 'Failed to share')
+      // Step 1: Generate share image (client-side)
+      const languageDisplayName = t(`common:language.${language}`, language);
+      const imageBlob = await generateShareImage(
+        score,
+        language,
+        level,
+        locale,
+        languageDisplayName
       );
 
-      // Reset error state after a delay
+      // Step 2: Convert to base64 for upload
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result as string;
+        const base64Image = base64Data.split(",")[1]; // Remove data:image/png;base64, prefix
+
+        // Step 3: Upload to R2 using existing action
+        try {
+          const uploadResponse = await fetch(window.location.href, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              imageData: base64Image,
+              score,
+              language,
+              level,
+              locale,
+            }),
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error("Failed to upload image to R2");
+          }
+
+          const uploadResult = await uploadResponse.json();
+          const uploadedImageUrl = uploadResult.imageUrl;
+
+          if (!uploadedImageUrl) {
+            throw new Error("No image URL returned from upload");
+          }
+
+          setGeneratedImageUrl(uploadedImageUrl);
+
+          // Step 4: Save result to KV with uploaded image URL
+          saveResultToKV(uploadedImageUrl);
+        } catch (uploadError) {
+          console.error("Image upload error:", uploadError);
+          throw uploadError;
+        }
+      };
+
+      reader.onerror = () => {
+        throw new Error("Failed to convert image to base64");
+      };
+
+      reader.readAsDataURL(imageBlob);
+    } catch (error) {
+      console.error("Share preparation error:", error);
+      setShareState("error");
+      setShareError(
+        error instanceof Error ? error.message : t("share:button.error")
+      );
       setTimeout(() => {
         setShareState("idle");
         setShareError("");
@@ -132,45 +181,125 @@ export function ShareButton({
   };
 
   /**
-   * Gets the button text based on current state
+   * Save result to KV storage
    */
-  const getButtonText = (): string => {
-    switch (shareState) {
-      case "generating":
-        return t('share:button.generating', 'Generating...');
-      case "success":
-        return t('share:button.success', 'Shared!');
-      case "error":
-        return t('share:button.error', 'Error');
-      default:
-        return t('share:button.share', 'Share');
-    }
+  const saveResultToKV = (imageUrl: string) => {
+    const saveData = {
+      score,
+      language,
+      level: parseInt(level, 10),
+      locale,
+      feedback,
+      strengths,
+      improvements,
+      imageUrl,
+    };
+
+    fetcher.submit(saveData, {
+      method: "POST",
+      action: "/api/save-result",
+      encType: "application/json",
+    });
   };
 
   /**
-   * Gets the button icon based on current state
+   * Share with result URL after result is saved
    */
+  const handleShareWithResultUrl = async (
+    resultUrl: string,
+    imageUrl: string
+  ) => {
+    try {
+      // Generate share text with result URL
+      const languageDisplayName = t(`common:language.${language}`, language);
+      const shareText =
+        locale === "ja"
+          ? `#CodeRabbit コードレビューゲームで${score}点を獲得しました！\n言語: ${languageDisplayName} | レベル: ${level}\n\n${resultUrl}`
+          : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName} | Level: ${level}\n\n${resultUrl}`;
+
+      // Try to generate and share image
+      try {
+        const imageBlob = await generateShareImage(
+          score,
+          language,
+          level,
+          locale,
+          languageDisplayName
+        );
+        const fileName = `code-review-game-${language}-level${level}-${score}pts.png`;
+        const imageFile = blobToFile(imageBlob, fileName);
+
+        if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+          await navigator.share({
+            title: t("common:language.codeReviewGame", "Code Review Game"),
+            text: shareText,
+            files: [imageFile],
+          });
+        } else {
+          // Fallback: Copy to clipboard or open X intent
+          const xIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+          window.open(xIntentUrl, "_blank");
+        }
+      } catch (imageError) {
+        // If image generation fails, share text only
+        console.warn("Image generation failed, sharing text only:", imageError);
+        const xIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+        window.open(xIntentUrl, "_blank");
+      }
+
+      setShareState("success");
+      setTimeout(() => setShareState("idle"), 3000);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        setShareState("idle");
+        return;
+      }
+
+      setShareState("error");
+      setShareError(
+        error instanceof Error ? error.message : t("share:button.error")
+      );
+      setTimeout(() => {
+        setShareState("idle");
+        setShareError("");
+      }, 5000);
+    }
+  };
+
+  const getButtonText = (): string => {
+    switch (shareState) {
+      case "generating":
+        return t("share:button.generating", "Generating...");
+      case "saving":
+        return t("share:button.saving", "Saving...");
+      case "success":
+        return t("share:button.success", "Shared!");
+      case "error":
+        return t("share:button.error", "Error");
+      default:
+        return t("share:button.share", "Share");
+    }
+  };
+
   const getButtonIcon = (): string => {
     switch (shareState) {
       case "generating":
-        return "mdi:loading"; // Rotating spinner icon
+      case "saving":
+        return "mdi:loading";
       case "success":
         return "mdi:check-circle";
       case "error":
         return "mdi:alert-circle";
       default:
-        return "mdi:share-variant"; // Share icon
+        return "mdi:share-variant";
     }
   };
 
-  /**
-   * Determines if the button should be disabled
-   */
-  const isDisabled = shareState === "generating";
+  const isDisabled =
+    shareState === "generating" ||
+    shareState === "saving" ||
+    fetcher.state !== "idle";
 
-  /**
-   * Gets button color classes based on state
-   */
   const getButtonColorClasses = (): string => {
     switch (shareState) {
       case "success":
@@ -196,22 +325,22 @@ export function ShareButton({
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
           dark:focus:ring-offset-gray-900
         `}
-        aria-label={t('button.share')}
+        aria-label={t("button.share")}
         aria-busy={isDisabled}
       >
-        {/* Icon with conditional animation */}
         <Icon
           icon={getButtonIcon()}
           width={24}
           height={24}
-          className={shareState === "generating" ? "animate-spin" : ""}
+          className={
+            shareState === "generating" || shareState === "saving"
+              ? "animate-spin"
+              : ""
+          }
         />
-
-        {/* Button text */}
         <span>{getButtonText()}</span>
       </button>
 
-      {/* Error/Info message display */}
       {shareError && (
         <p
           className={`mt-2 text-sm ${
