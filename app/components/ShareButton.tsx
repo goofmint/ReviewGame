@@ -7,8 +7,9 @@
  * 3. Share with result URL
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { useFetcher } from "react-router";
 import { Icon } from "@iconify/react";
 import { generateShareImage, blobToFile } from "~/utils/imageGenerator";
 import type { SaveResultResponse } from "~/types/result";
@@ -69,90 +70,139 @@ export function ShareButton({
   className = "",
 }: ShareButtonProps) {
   const { t } = useTranslation(["share", "common"]);
+  const uploadFetcher = useFetcher();
+  const saveFetcher = useFetcher<SaveResultResponse>();
 
   const [shareState, setShareState] = useState<ShareState>("idle");
   const [shareError, setShareError] = useState<string>("");
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>("");
+
+  // Monitor upload fetcher state
+  useEffect(() => {
+    if (uploadFetcher.state === "loading" || uploadFetcher.state === "submitting") {
+      setShareState("generating");
+    } else if (uploadFetcher.data?.imageUrl) {
+      // Upload completed, save to KV
+      const imageUrl = uploadFetcher.data.imageUrl;
+      setUploadedImageUrl(imageUrl);
+      setShareState("saving");
+
+      saveFetcher.submit(
+        {
+          score,
+          language,
+          level: parseInt(level, 10),
+          locale,
+          feedback,
+          strengths,
+          improvements,
+          imageUrl,
+        },
+        {
+          method: "POST",
+          action: "/api/save-result",
+          encType: "application/json",
+        }
+      );
+    } else if (uploadFetcher.data?.error) {
+      setShareState("error");
+      setShareError(uploadFetcher.data.error);
+      setTimeout(() => {
+        setShareState("idle");
+        setShareError("");
+      }, 5000);
+    }
+  }, [uploadFetcher.state, uploadFetcher.data]);
+
+  // Monitor save fetcher state
+  useEffect(() => {
+    if (saveFetcher.state === "loading" || saveFetcher.state === "submitting") {
+      setShareState("saving");
+    } else if (saveFetcher.data?.success) {
+      // Save completed, share
+      handleShareWithResultUrl(saveFetcher.data.resultUrl);
+      setShareState("success");
+      setTimeout(() => setShareState("idle"), 3000);
+    } else if (saveFetcher.data && !saveFetcher.data.success) {
+      setShareState("error");
+      setShareError(t("share:button.error", "Failed to save result"));
+      setTimeout(() => {
+        setShareState("idle");
+        setShareError("");
+      }, 5000);
+    }
+  }, [saveFetcher.state, saveFetcher.data]);
 
   /**
    * Handle share button click
-   * Full flow: Generate image → Upload to R2 → Save to KV → Share on X
+   * Generate image and upload to R2 using useFetcher
    */
   const handleShare = async () => {
     try {
       setShareError("");
       setShareState("generating");
 
-      let imageUrl = providedImageUrl;
+      if (providedImageUrl) {
+        // Skip generation, go directly to save
+        setUploadedImageUrl(providedImageUrl);
+        setShareState("saving");
+        saveFetcher.submit(
+          {
+            score,
+            language,
+            level: parseInt(level, 10),
+            locale,
+            feedback,
+            strengths,
+            improvements,
+            imageUrl: providedImageUrl,
+          },
+          {
+            method: "POST",
+            action: "/api/save-result",
+            encType: "application/json",
+          }
+        );
+        return;
+      }
 
-      // Step 1: Generate and upload image if not provided
-      if (!imageUrl) {
-        const languageDisplayName = t(`common:language.${language}`, language);
-        const imageBlob = await generateShareImage(
+      // Generate image
+      const languageDisplayName = t(`common:language.${language}`, language);
+      const imageBlob = await generateShareImage(
+        score,
+        language,
+        level,
+        locale,
+        languageDisplayName
+      );
+
+      // Convert to base64
+      const base64Image = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Data = reader.result as string;
+          resolve(base64Data.split(",")[1]);
+        };
+        reader.onerror = () => reject(new Error("Failed to convert image to base64"));
+        reader.readAsDataURL(imageBlob);
+      });
+
+      // Upload to R2 using useFetcher
+      uploadFetcher.submit(
+        {
+          imageData: base64Image,
           score,
           language,
           level,
           locale,
-          languageDisplayName
-        );
-
-        // Convert to base64
-        const base64Image = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64Data = reader.result as string;
-            resolve(base64Data.split(",")[1]); // Remove data:image/png;base64, prefix
-          };
-          reader.onerror = () => reject(new Error("Failed to convert image to base64"));
-          reader.readAsDataURL(imageBlob);
-        });
-
-        // Upload to R2
-        const uploadResponse = await fetch("/api/upload-image", {
+        },
+        {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            imageData: base64Image,
-            score,
-            language,
-            level,
-            locale,
-          }),
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error("Failed to upload image to R2");
+          action: "/api/upload-image",
+          encType: "application/json",
         }
-
-        const uploadResult = await uploadResponse.json();
-        imageUrl = uploadResult.imageUrl;
-
-        if (!imageUrl) {
-          throw new Error("No image URL returned from upload");
-        }
-      }
-
-      // Step 2: Save result to KV
-      setShareState("saving");
-      const saveResult = await saveResultToKV(imageUrl);
-
-      if (!saveResult.success) {
-        throw new Error("Failed to save result to KV");
-      }
-
-      // Step 3: Share with result URL
-      await handleShareWithResultUrl(saveResult.resultUrl);
-
-      setShareState("success");
-      setTimeout(() => setShareState("idle"), 3000);
+      );
     } catch (error) {
-      // User cancelled the share
-      if (error instanceof Error && error.name === "AbortError") {
-        setShareState("idle");
-        return;
-      }
-
       console.error("Share error:", error);
       setShareState("error");
       setShareError(
@@ -166,79 +216,23 @@ export function ShareButton({
   };
 
   /**
-   * Save result to KV storage
-   */
-  const saveResultToKV = async (imageUrl: string): Promise<SaveResultResponse> => {
-    const saveData = {
-      score,
-      language,
-      level: parseInt(level, 10),
-      locale,
-      feedback,
-      strengths,
-      improvements,
-      imageUrl,
-    };
-
-    const response = await fetch("/api/save-result", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(saveData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to save result");
-    }
-
-    return await response.json();
-  };
-
-  /**
    * Share with result URL after result is saved
    */
-  const handleShareWithResultUrl = async (resultUrl: string) => {
-    // Generate share text with result URL
-    const languageDisplayName = t(`common:language.${language}`, language);
-    const shareText =
-      locale === "ja"
-        ? `#CodeRabbit コードレビューゲームで${score}点を獲得しました！\n言語: ${languageDisplayName} | レベル: ${level}\n\n${resultUrl}`
-        : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName} | Level: ${level}\n\n${resultUrl}`;
-
-    // Try to generate and share image
+  const handleShareWithResultUrl = (resultUrl: string) => {
     try {
-      const imageBlob = await generateShareImage(
-        score,
-        language,
-        level,
-        locale,
-        languageDisplayName
-      );
-      const fileName = `code-review-game-${language}-level${level}-${score}pts.png`;
-      const imageFile = blobToFile(imageBlob, fileName);
+      // Generate share text with result URL
+      const languageDisplayName = t(`common:language.${language}`, language);
+      const shareText =
+        locale === "ja"
+          ? `#CodeRabbit コードレビューゲームで${score}点を獲得しました！\n言語: ${languageDisplayName} | レベル: ${level}\n\n${resultUrl}`
+          : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName} | Level: ${level}\n\n${resultUrl}`;
 
-      if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
-        await navigator.share({
-          title: t("common:language.codeReviewGame", "Code Review Game"),
-          text: shareText,
-          files: [imageFile],
-        });
-      } else {
-        // Fallback: Open X intent
-        const xIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
-        window.open(xIntentUrl, "_blank");
-      }
-    } catch (imageError) {
-      // If image generation or share fails, open X intent with text only
-      if (imageError instanceof Error && imageError.name === "AbortError") {
-        // User cancelled, don't show error
-        throw imageError;
-      }
-      console.warn("Image share failed, opening X intent:", imageError);
+      // Open X intent with result URL
       const xIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
       window.open(xIntentUrl, "_blank");
+    } catch (error) {
+      console.error("Share error:", error);
+      // Ignore errors in opening window
     }
   };
 
@@ -273,7 +267,9 @@ export function ShareButton({
 
   const isDisabled =
     shareState === "generating" ||
-    shareState === "saving";
+    shareState === "saving" ||
+    uploadFetcher.state !== "idle" ||
+    saveFetcher.state !== "idle";
 
   const getButtonColorClasses = (): string => {
     switch (shareState) {
