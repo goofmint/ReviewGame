@@ -40,6 +40,32 @@ export interface R2Object {
 }
 
 /**
+ * Custom error implementation that marks failures as retryable by default
+ */
+export class RetryableError extends Error {
+  constructor(message: string, public retryable: boolean = true) {
+    super(message);
+    this.name = "RetryableError";
+  }
+}
+
+/**
+ * Type guard to safely detect retryable errors without unsafe casts
+ */
+function isRetryableError(error: unknown): error is RetryableError {
+  if (error instanceof RetryableError) {
+    return true;
+  }
+
+  if (typeof error !== "object" || error === null || !("retryable" in error)) {
+    return false;
+  }
+
+  const candidate = error as { retryable?: unknown };
+  return typeof candidate.retryable === "boolean";
+}
+
+/**
  * Validates the image data before upload
  * Ensures file size and type constraints are met
  *
@@ -114,6 +140,19 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
 };
 
 /**
+ * Validates that the retry configuration is internally consistent
+ */
+function validateRetryConfig(config: RetryConfig): void {
+  if (config.backoffDelays.length !== config.maxAttempts) {
+    throw new Error(
+      `Retry config invalid: backoffDelays length (${config.backoffDelays.length}) must equal maxAttempts (${config.maxAttempts})`
+    );
+  }
+}
+
+validateRetryConfig(DEFAULT_RETRY_CONFIG);
+
+/**
  * Executes an async operation with retry logic and exponential backoff
  * Retries network errors up to maxAttempts times with increasing delays
  *
@@ -126,6 +165,7 @@ async function withRetry<T>(
   operation: () => Promise<T>,
   config: RetryConfig = DEFAULT_RETRY_CONFIG
 ): Promise<T> {
+  validateRetryConfig(config);
   let lastError: Error | unknown;
 
   for (let attempt = 1; attempt <= config.maxAttempts; attempt++) {
@@ -140,7 +180,7 @@ async function withRetry<T>(
         (error.message.includes("Network") ||
           error.message.includes("network") ||
           error.message.includes("connection") ||
-          (error as any).retryable === true);
+          isRetryableError(error));
 
       // If not retryable or last attempt, throw immediately
       if (!isRetryable || attempt === config.maxAttempts) {
@@ -200,9 +240,7 @@ export async function uploadImageToR2(
 
     if (!uploadResult) {
       // Create a retryable error for null results
-      const error = new Error("Failed to upload image to R2: null result");
-      (error as any).retryable = true;
-      throw error;
+      throw new RetryableError("Failed to upload image to R2: null result");
     }
 
     return uploadResult;

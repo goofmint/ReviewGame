@@ -4,7 +4,7 @@
  * Allows testing different parameters and viewing the resulting image
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MetaFunction } from "react-router";
 import { generateShareImage } from "~/utils/imageGenerator";
 import { availableLanguages } from "~/data/problems";
@@ -61,15 +61,15 @@ export default function SharePreview() {
   };
 
   /**
-   * Cleanup: revoke object URL when component unmounts
+   * Cleanup: revoke object URL when component unmounts or changes
    */
-  useState(() => {
+  useEffect(() => {
     return () => {
       if (previewUrl) {
         URL.revokeObjectURL(previewUrl);
       }
     };
-  });
+  }, [previewUrl]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-12 px-4">

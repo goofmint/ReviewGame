@@ -13,6 +13,13 @@ const IMAGE_WIDTH = 1200;
 const IMAGE_HEIGHT = 630;
 
 /**
+ * Localized suffixes that follow the user's score
+ */
+const SCORE_SUFFIX_BY_LOCALE: Record<string, string> = {
+  ja: "点",
+};
+
+/**
  * Language-specific gradient color schemes
  * Each language has a unique visual identity for share images
  */
@@ -78,7 +85,8 @@ export async function generateShareImage(
   // Draw score (large and prominent)
   ctx.font = "bold 120px sans-serif";
   ctx.fillStyle = "white";
-  ctx.fillText(`${score}点`, IMAGE_WIDTH / 2, 250);
+  const scoreSuffix = getScoreSuffixForLocale();
+  ctx.fillText(`${score}${scoreSuffix}`, IMAGE_WIDTH / 2, 250);
 
   // Draw language and level info
   ctx.font = "36px sans-serif";
@@ -119,6 +127,18 @@ export async function generateShareImage(
       1.0
     );
   });
+}
+
+/**
+ * Picks the localized suffix for score text
+ */
+function getScoreSuffixForLocale(): string {
+  if (typeof navigator === "undefined" || !navigator.language) {
+    return "";
+  }
+
+  const locale = navigator.language.split("-")[0]?.toLowerCase();
+  return (locale && SCORE_SUFFIX_BY_LOCALE[locale]) ?? "";
 }
 
 /**

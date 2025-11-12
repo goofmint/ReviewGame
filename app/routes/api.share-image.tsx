@@ -13,6 +13,10 @@ import {
 } from "~/utils/r2";
 import { generateTweetText, generateXIntentUrl } from "~/utils/share";
 import type { ShareResult } from "~/types/problem";
+import {
+  base64ToArrayBuffer,
+  validateBase64ImagePayload,
+} from "~/utils/imageData";
 
 /**
  * Environment bindings for Cloudflare Workers
@@ -77,28 +81,6 @@ function isRateLimited(clientId: string): boolean {
 }
 
 /**
- * Converts base64 data URL to ArrayBuffer
- *
- * @param base64 - Base64 data URL (data:image/png;base64,...)
- * @returns ArrayBuffer containing the binary data
- */
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  // Remove data URL prefix if present
-  const base64Data = base64.replace(/^data:image\/\w+;base64,/, "");
-
-  // Decode base64 to binary string
-  const binaryString = atob(base64Data);
-
-  // Convert binary string to ArrayBuffer
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-
-  return bytes.buffer;
-}
-
-/**
  * POST handler for share image upload
  * Accepts base64 image data, uploads to R2, returns public URL and share info
  */
@@ -107,7 +89,10 @@ export async function action({ request, context }: Route.ActionArgs) {
     console.log("Received share image upload request");
     // Check content type
     const contentType = request.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
+    if (
+      !contentType ||
+      !contentType.toLowerCase().includes("application/json")
+    ) {
       return Response.json(
         { error: "Content-Type must be application/json" },
         { status: 400 }
@@ -151,12 +136,28 @@ export async function action({ request, context }: Route.ActionArgs) {
       );
     }
 
+    // Validate image payload before conversion/upload
+    const validatedImage = validateBase64ImagePayload(body.imageData);
+    if (!validatedImage) {
+      return Response.json(
+        { error: "Invalid or too large imageData" },
+        { status: 400 }
+      );
+    }
+
     // Get R2 bucket from context (Cloudflare Workers binding)
     const env = context.cloudflare?.env as Env | undefined;
     const bucket = env?.SHARE_IMAGES;
+    if (!bucket) {
+      console.error("SHARE_IMAGES bucket binding is not configured");
+      return Response.json(
+        { error: "Image storage configuration is missing" },
+        { status: 500 }
+      );
+    }
 
     // Convert base64 to ArrayBuffer
-    const imageBuffer = base64ToArrayBuffer(body.imageData);
+    const imageBuffer = base64ToArrayBuffer(validatedImage.base64);
 
     // Generate storage key
     const timestamp = Date.now();
@@ -167,10 +168,17 @@ export async function action({ request, context }: Route.ActionArgs) {
     );
 
     // Upload to R2
-    await uploadImageToR2(bucket!, storageKey, imageBuffer);
+    await uploadImageToR2(bucket, storageKey, imageBuffer);
 
     // Get public URL
-    const publicUrl = env?.R2_PUBLIC_URL || "https://share.example.com";
+    if (!env?.R2_PUBLIC_URL) {
+      console.warn(
+        "R2_PUBLIC_URL not configured; falling back to request origin"
+      );
+    }
+    const requestOrigin =
+      request.headers.get("origin") || new URL(request.url).origin;
+    const publicUrl = env?.R2_PUBLIC_URL?.trim() || requestOrigin;
     const imageUrl = getPublicUrl(storageKey, publicUrl);
 
     // Generate tweet text and X intent URL
