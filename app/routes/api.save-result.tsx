@@ -1,16 +1,14 @@
 /**
- * API Endpoint: Save Review Result (Phase 5)
+ * API Endpoint: Save Review Result
  *
  * POST /api/save-result
  *
  * Saves a review result to Cloudflare KV with a unique UUID.
  * Implements rate limiting, validation, and sanitization.
- *
- * This endpoint should be called using useFetcher(), not direct fetch().
  */
 
-import { json } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs } from "@remix-run/cloudflare";
+import { json } from "react-router";
+import type { ActionFunctionArgs } from "react-router";
 import { v4 as uuidv4 } from "uuid";
 
 import type {
