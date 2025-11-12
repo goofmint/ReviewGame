@@ -38,15 +38,13 @@ interface SavedResult {
   improvements: string[];
   imageUrl: string;
   createdAt: number;
+  locale: string;
 }
 ```
 
 #### Cloudflare R2（OGP画像）
 
-- パス: `results/{uuid}.png`
-- サイズ: 1200x630px
-- フォーマット: PNG
-- 公開URL経由でアクセス可能
+すでに `generateShareImage` にて実装済。
 
 ### 3.2 URL設計
 
@@ -56,11 +54,19 @@ interface SavedResult {
 /:lang                      # レベル選択
 /:lang/:level               # 問題・レビュー画面
 /:lang/:level/result        # 評価結果画面（既存）
-
 # 新規ルート
 /results/:id                # 保存済み結果の表示ページ
-/api/results/save           # 結果保存API
-/api/results/:id/image      # OGP画像取得API
+```
+
+既存のシェアボタンを押した際のアクションで、KVへの保存を行う。画像保存部分はすでに実装済。
+KVへの保存後、Xへのシェアリンクを開く。
+
+```
+コードレビューゲーム powered by #CodeRabbit にて XX点を獲得しました！
+言語： Flutter
+レベル： 2
+
+https://review-game.goofmint.workers.dev/results/{uuid}
 ```
 
 ### 3.3 データフロー
@@ -73,8 +79,7 @@ interface SavedResult {
     ↓ 2. OGP画像生成（R2に保存）
     ↓ 3. 結果データ保存（KV）
     ↓ 4. 保存URL返却
-[結果URL表示 & クリップボードにコピー]
-    ↓ ユーザーがURLにアクセス
+    ↓ 5. XのシェアURLへリダイレクト
 [GET /results/:id]
     ↓ 1. KVから結果データ取得
     ↓ 2. meta tagにOGP画像設定
@@ -188,33 +193,15 @@ interface ShareResultButtonProps {
 <meta name="twitter:card" content="summary_large_image" />
 ```
 
-### 5.3 OGP画像API
-
-**エンドポイント:** `GET /api/results/:id/image`
-
-**処理フロー:**
-1. R2から `results/{id}.png` 取得
-2. 存在しない場合は404
-3. Cache-Control ヘッダー設定（1年）
-4. 画像データを返却
-
 ## 6. OGP画像生成仕様
 
 ### 6.1 画像デザイン
 
 既存のシェア画像生成ロジック（`app/utils/imageGenerator.ts`）を再利用
 
-**サイズ:** 1200x630px
-
-**レイアウト:**
-- 背景: 言語別グラデーション
-- 中央: スコア（大きく表示）
-- サブテキスト: 言語・レベル情報
-- 右下: CodeRabbitアイコン
-
 ### 6.2 生成タイミング
 
-結果保存API呼び出し時に生成し、R2に保存
+結果保存API呼び出し時に生成し、R2に保存（実装済）
 
 ## 7. データ構造
 
@@ -224,16 +211,9 @@ interface ShareResultButtonProps {
 result:{uuid}  → SavedResult object
 ```
 
-**TTL:** 365日（1年後に自動削除）
-
 ### 7.2 R2ファイル構造
 
-```
-results/
-  {uuid}.png   → OGP画像
-```
-
-**ライフサイクル:** KVのTTLと同期（1年）
+実装済。
 
 ## 8. セキュリティ考慮事項
 
@@ -257,7 +237,7 @@ results/
 ### 8.4 アクセス制御
 
 - 結果ページ: 誰でもアクセス可能（URLを知っている場合）
-- 削除機能なし（TTLによる自動削除のみ）
+- 削除機能なし
 
 ## 9. パフォーマンス最適化
 
