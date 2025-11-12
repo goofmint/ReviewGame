@@ -6,7 +6,7 @@
   "difficulty": "難易度",
   "locked": "ロック中",
   "unlocked": "解放済み",
-  "bestScore": "最高スコア: {{score}}点",
+  "bestScore": "ベストスコア: {{score}}点",
   "attempts": "{{count}}回挑戦",
   "requirements": "要件",
   "code": "コード",
@@ -14,5 +14,8 @@
   "reviewPlaceholder": "このコードのレビューを記入してください...\n\nヒント: コードの行番号や要件をクリックすると、自動的にテンプレートが挿入されます。",
   "submitting": "評価中...",
   "lineReference": "コードの{{line}}行目: ",
-  "requirementReference": "要件「{{requirement}}」について: "
+  "requirementReference": "要件「{{requirement}}」について: ",
+  "languageNotFound": "言語が見つかりません",
+  "startChallenge": "挑戦する →",
+  "noProblems": "この言語の問題はまだ準備されていません。"
 }

@@ -14,5 +14,8 @@
   "reviewPlaceholder": "Write your code review here...\n\nHint: Click on line numbers or requirements to automatically insert templates.",
   "submitting": "Evaluating...",
   "lineReference": "Line {{line}}: ",
-  "requirementReference": "Regarding requirement \"{{requirement}}\": "
+  "requirementReference": "Regarding requirement \"{{requirement}}\": ",
+  "languageNotFound": "Language not found",
+  "startChallenge": "Start →",
+  "noProblems": "No problems available for this language yet."
 }

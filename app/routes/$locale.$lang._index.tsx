@@ -6,62 +6,94 @@
  * Locked levels are shown but cannot be accessed until prerequisites are met
  */
 
-import { Link, useParams } from "react-router";
-import { problems } from "~/data/problems";
+import { Link, useParams, type LoaderFunctionArgs } from "react-router";
+import { useTranslation } from "react-i18next";
+import { useEffect, useState } from "react";
+import { problems, availableLocales } from "~/data/problems";
 import { isLevelUnlocked, getBestScore } from "~/utils/progress";
-import { LANGUAGE_DISPLAY_NAMES } from "~/utils/constants";
-import type { Route } from "./+types/$lang._index";
+import { initI18n } from "~/utils/i18n.client";
 
-export function meta({ params }: Route.MetaArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
+  const { locale, lang } = params;
+
+  // Validate locale and language parameters
+  if (!locale || !availableLocales.includes(locale)) {
+    throw new Response("Invalid locale", { status: 404 });
+  }
+
+  if (!lang || !problems[locale]?.[lang]) {
+    throw new Response("Invalid language", { status: 404 });
+  }
+
+  return { locale, lang };
+}
+
+export function meta({ params }: { params: { locale: string; lang: string } }) {
   return [
-    { title: `${params.lang} - コードレビューゲーム` },
-    { name: "description", content: `${params.lang}のレベルを選択` },
+    { title: `${params.lang} - Code Review Game` },
+    { name: "description", content: `Select level for ${params.lang}` },
   ];
 }
 
 export default function LevelSelect() {
-  const { lang } = useParams();
+  const { locale, lang } = useParams();
+  const { t, ready } = useTranslation(['common', 'game']);
+  const [i18nReady, setI18nReady] = useState(false);
+
+  useEffect(() => {
+    if (locale) {
+      initI18n(locale).then(() => {
+        setI18nReady(true);
+      });
+    }
+  }, [locale]);
+
+  if (!i18nReady || !ready) {
+    return <div className="min-h-screen flex items-center justify-center">
+      <div className="text-xl">Loading...</div>
+    </div>;
+  }
 
   // Validate language parameter
-  if (!lang || !(lang in problems)) {
+  if (!locale || !lang || !problems[locale]?.[lang]) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
         <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-            言語が見つかりません
+            {t('game:languageNotFound', 'Language not found')}
           </h1>
           <Link
-            to="/"
+            to={`/${locale}`}
             className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            言語選択に戻る
+            {t('common:button.backToLanguages')}
           </Link>
         </div>
       </div>
     );
   }
 
-  const langProblems = problems[lang as keyof typeof problems];
+  const langProblems = problems[locale][lang];
   const levels = Object.keys(langProblems).map(Number).sort((a, b) => a - b);
 
   // Get language display name
-  const displayName = LANGUAGE_DISPLAY_NAMES[lang] || lang;
+  const displayName = t(`common:language.${lang}`, lang);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-16">
         <header className="mb-12">
           <Link
-            to="/"
+            to={`/${locale}`}
             className="inline-block mb-6 text-blue-600 dark:text-blue-400 hover:underline"
           >
-            ← 言語選択に戻る
+            ← {t('common:button.backToLanguages')}
           </Link>
           <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
             {displayName}
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300">
-            レベルを選択してください
+            {t('game:selectLevel')}
           </p>
         </header>
 
@@ -76,7 +108,7 @@ export default function LevelSelect() {
               return (
                 <Link
                   key={level}
-                  to={unlocked ? `/${lang}/${level}` : `/${lang}`}
+                  to={unlocked ? `/${locale}/${lang}/${level}` : `/${locale}/${lang}`}
                   className={`group block p-6 rounded-xl shadow-lg transition-all duration-300 ${
                     unlocked
                       ? "bg-white dark:bg-gray-800 hover:shadow-2xl transform hover:-translate-y-1"
@@ -89,7 +121,7 @@ export default function LevelSelect() {
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
                       {!unlocked && <span>🔒</span>}
-                      レベル {level}
+                      {t('game:level', { level })}
                     </h3>
                     <div className="flex">
                       {Array.from({ length: problem.difficulty }).map((_, i) => (
@@ -103,22 +135,22 @@ export default function LevelSelect() {
                   {bestScore !== undefined && (
                     <div className="mb-3 px-3 py-1 bg-green-100 dark:bg-green-900/30 rounded-lg inline-block">
                       <span className="text-green-700 dark:text-green-300 text-sm font-semibold">
-                        ベストスコア: {bestScore}点
+                        {t('game:bestScore', { score: bestScore })}
                       </span>
                     </div>
                   )}
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500 dark:text-gray-400">
-                      難易度: {problem.difficulty}
+                      {t('game:difficulty')}: {problem.difficulty}
                     </span>
                     {unlocked && (
                       <span className="text-blue-600 dark:text-blue-400 group-hover:translate-x-1 transition-transform">
-                        挑戦する →
+                        {t('game:startChallenge', 'Start →')}
                       </span>
                     )}
                     {!unlocked && (
                       <span className="text-gray-500 dark:text-gray-500">
-                        ロック中
+                        {t('game:locked')}
                       </span>
                     )}
                   </div>
@@ -130,13 +162,13 @@ export default function LevelSelect() {
           {levels.length === 0 && (
             <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
               <p className="text-gray-700 dark:text-gray-300 mb-4">
-                この言語の問題はまだ準備されていません。
+                {t('game:noProblems', 'No problems available for this language yet.')}
               </p>
               <Link
-                to="/"
+                to={`/${locale}`}
                 className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
-                言語選択に戻る
+                {t('common:button.backToLanguages')}
               </Link>
             </div>
           )}
