@@ -99,7 +99,7 @@ export function ShareButton({
           imageUrl,
         },
         {
-          method: "POST",
+          method: "post",
           action: "/api/save-result",
           encType: "application/json",
         }
@@ -159,7 +159,7 @@ export function ShareButton({
             imageUrl: providedImageUrl,
           },
           {
-            method: "POST",
+            method: "post",
             action: "/api/save-result",
             encType: "application/json",
           }
@@ -198,7 +198,7 @@ export function ShareButton({
           locale,
         },
         {
-          method: "POST",
+          method: "post",
           action: "/api/upload-image",
           encType: "application/json",
         }
