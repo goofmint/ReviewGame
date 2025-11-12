@@ -616,8 +616,13 @@ preview_bucket_name = "review-game-share-images-preview"
 - **Phase 5: 結果保存**：
   - 個人情報は一切保存しない
   - UUID v4による推測不可能なURL
-  - 入力値のバリデーション
-  - データサイズ制限（最大10KB）
+  - レート制限（5リクエスト/分、KVベース）
+  - XSSサニタイゼーション（`sanitize-html`使用）
+  - 入力値のバリデーション（型・長さ・形式）
+  - データサイズ制限（最大32KB）
+  - CSRF対策は不要（認証なし、公開データ）
+
+**詳細**: `tasks/phase5-result-persistence.md` の「セキュリティ」セクション参照
 
 ## 12. パフォーマンス最適化
 
