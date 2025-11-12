@@ -107,7 +107,7 @@ export function ShareButton({
         });
 
         // Upload to R2
-        const uploadResponse = await fetch(window.location.href, {
+        const uploadResponse = await fetch("/api/upload-image", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
