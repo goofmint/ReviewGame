@@ -1,0 +1,29 @@
+{
+  "nav": {
+    "home": "ホーム",
+    "back": "戻る"
+  },
+  "button": {
+    "submit": "送信",
+    "retry": "もう一度挑戦",
+    "next": "次のレベルへ",
+    "share": "シェア",
+    "backToLanguages": "言語選択に戻る",
+    "backToLevels": "レベル選択に戻る"
+  },
+  "language": {
+    "javascript": "JavaScript",
+    "python": "Python",
+    "flutter": "Flutter",
+    "codeReviewGame": "コードレビューゲーム"
+  },
+  "languageDescription": {
+    "javascript": "Web開発の基礎言語",
+    "python": "データ分析・AI開発",
+    "flutter": "モバイルアプリ開発"
+  },
+  "locale": {
+    "ja": "日本語",
+    "en": "English"
+  }
+}

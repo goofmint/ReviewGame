@@ -16,6 +16,7 @@ interface EvaluationRequest {
   code: string;
   userReview: string;
   evaluationCriteria?: string;
+  locale?: string; // Add locale parameter
 }
 
 /**
@@ -30,14 +31,10 @@ interface LLMEvaluationResponse {
 }
 
 /**
- * Constructs the evaluation prompt for the LLM
- * This prompt guides the LLM to evaluate the user's code review
- *
- * @param request - The evaluation request containing code, requirements, and user review
- * @returns The complete prompt string
+ * Prompt templates by locale
  */
-function buildEvaluationPrompt(request: EvaluationRequest): string {
-  return `あなたは経験豊富なコードレビューアです。新人エンジニアのコードレビューを評価してください。
+const PROMPT_TEMPLATES = {
+  ja: (request: EvaluationRequest) => `あなたは経験豊富なコードレビューアです。新人エンジニアのコードレビューを評価してください。
 
 【問題の要件】
 ${request.requirements}
@@ -85,7 +82,70 @@ ${
     "型チェックの重要性についてより詳しく説明できるとよいでしょう",
     "具体的なコード例を示すとさらに良いです"
   ]
-}`;
+}`,
+
+  en: (request: EvaluationRequest) => `You are an experienced code reviewer. Please evaluate the code review written by a junior engineer.
+
+【Requirements】
+${request.requirements}
+
+【Code to Review】
+${request.code}
+
+【Junior Engineer's Review】
+${request.userReview}
+
+${
+  request.evaluationCriteria
+    ? `【Evaluation Reference】\n${request.evaluationCriteria}\n\n`
+    : ""
+}【Evaluation Task】
+Analyze the code and requirements above, and evaluate the junior engineer's review from the following perspectives:
+
+1. Accuracy (40 points): Can they correctly identify actual problems in the code?
+   - Can they find areas that don't meet requirements?
+   - Can they point out bugs and potential issues?
+
+2. Completeness (30 points): Are they missing any important issues?
+   - Error handling, type checking, boundary value checking, etc.
+   - Verification of each requirement item
+
+3. Clarity (20 points): Are their explanations clear and constructive?
+   - Do they indicate specific line numbers or locations?
+   - Do they explain why something is a problem?
+
+4. Practicality (10 points): Do they provide specific improvement suggestions or alternatives?
+   - Do they suggest how to fix issues?
+   - Do they provide code examples?
+
+【Output Format】
+Please return the evaluation result in JSON format only, without any other text:
+
+{
+  "score": 75,
+  "feedback": "Overall well done. You correctly identified the main issues, but the explanation about the importance of type checking could be more detailed.",
+  "strengths": [
+    "You accurately identified the missing upper limit check",
+    "You provided specific improvement suggestions"
+  ],
+  "improvements": [
+    "You could explain the importance of type checking in more detail",
+    "Providing specific code examples would be even better"
+  ]
+}`
+};
+
+/**
+ * Constructs the evaluation prompt for the LLM
+ * This prompt guides the LLM to evaluate the user's code review
+ *
+ * @param request - The evaluation request containing code, requirements, and user review
+ * @returns The complete prompt string
+ */
+function buildEvaluationPrompt(request: EvaluationRequest): string {
+  const locale = request.locale || 'en';
+  const template = PROMPT_TEMPLATES[locale as keyof typeof PROMPT_TEMPLATES] || PROMPT_TEMPLATES.en;
+  return template(request);
 }
 
 /**

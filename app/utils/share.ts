@@ -4,13 +4,25 @@
  * Provides consistent formatting across the application
  */
 
-import { LANGUAGE_DISPLAY_NAMES } from "./constants";
-
 /**
  * Base URL for the game
  * This should be configured via environment variables in production
  */
 const GAME_URL = "https://review-game.goofmint.workers.dev";
+
+/**
+ * Tweet templates by locale
+ */
+const TWEET_TEMPLATES: Record<string, (score: number, displayName: string, level: string) => string> = {
+  ja: (score, displayName, level) => `#CodeRabbit コードレビューゲームで${score}点を獲得しました！
+言語: ${displayName} | レベル: ${level}
+
+${GAME_URL}`,
+  en: (score, displayName, level) => `I scored ${score} points on #CodeRabbit Code Review Game!
+Language: ${displayName} | Level: ${level}
+
+${GAME_URL}`,
+};
 
 /**
  * Generates the tweet text for sharing a game result
@@ -19,22 +31,25 @@ const GAME_URL = "https://review-game.goofmint.workers.dev";
  * @param score - The score achieved (0-100)
  * @param language - The programming language ID (e.g., "javascript")
  * @param level - The level number
+ * @param locale - The locale for localized text (default: "en")
+ * @param languageDisplayName - The display name for the language (optional)
  * @returns Formatted tweet text ready for sharing
  */
 export function generateTweetText(
   score: number,
   language: string,
-  level: string
+  level: string,
+  locale: string = "en",
+  languageDisplayName?: string
 ): string {
   // Get display name for the language, fallback to capitalized language ID
-  const displayName =
-    LANGUAGE_DISPLAY_NAMES[language] ||
+  const displayName = languageDisplayName ||
     language.charAt(0).toUpperCase() + language.slice(1);
 
-  return `#CodeRabbit コードレビューゲームで${score}点を獲得しました！
-言語: ${displayName} | レベル: ${level}
+  // Get template function for the locale, fallback to English
+  const template = TWEET_TEMPLATES[locale] || TWEET_TEMPLATES.en;
 
-${GAME_URL}`;
+  return template(score, displayName, level);
 }
 
 /**

@@ -1,0 +1,17 @@
+{
+  "image": {
+    "title": "Code Review Game",
+    "scoreLabel": "{{score}} pts",
+    "subtitle": "{{language}} - Level {{level}}"
+  },
+  "tweet": {
+    "template": "I scored {{score}} points on #CodeRabbit Code Review Game!\nLanguage: {{language}} | Level: {{level}}\n\n{{gameUrl}}"
+  },
+  "button": {
+    "share": "Share",
+    "generating": "Generating image...",
+    "success": "Shared!",
+    "error": "An error occurred",
+    "downloadFallback": "Web Share API not supported. Image downloaded."
+  }
+}

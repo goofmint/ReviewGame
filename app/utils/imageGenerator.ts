@@ -4,8 +4,6 @@
  * Generates 1200x630px images with gradients, score, and language info
  */
 
-import { LANGUAGE_DISPLAY_NAMES } from "./constants";
-
 /**
  * Image dimensions following X/Twitter OGP recommendations
  */
@@ -17,6 +15,15 @@ const IMAGE_HEIGHT = 630;
  */
 const SCORE_SUFFIX_BY_LOCALE: Record<string, string> = {
   ja: "点",
+  en: " pts",
+};
+
+/**
+ * Localized title text for share images
+ */
+const TITLE_BY_LOCALE: Record<string, string> = {
+  ja: "コードレビューゲーム by CodeRabbit",
+  en: "Code Review Game by CodeRabbit",
 };
 
 /**
@@ -41,19 +48,23 @@ const DEFAULT_GRADIENT = { start: "#4F46E5", end: "#7C3AED" };
  * @param score - The score achieved (0-100)
  * @param language - The programming language ID
  * @param level - The level number
+ * @param locale - The locale for localized text (default: "en")
+ * @param languageDisplayName - The display name for the language (optional)
  * @returns Promise resolving to a Blob containing the PNG image
  * @throws Error if Canvas API is not available or image generation fails
  */
 export async function generateShareImage(
   score: number,
   language: string,
-  level: string
+  level: string,
+  locale: string = "en",
+  languageDisplayName?: string
 ): Promise<Blob> {
   // Ensure we're in a browser environment
   if (typeof window === "undefined" || typeof document === "undefined") {
     throw new Error("Canvas API is only available in browser environment");
   }
-  console.log("Generating share image for", language, "level", level, "score", score);
+  console.log("Generating share image for", language, "level", level, "score", score, "locale", locale);
   // Create canvas element
   const canvas = document.createElement("canvas");
   canvas.width = IMAGE_WIDTH;
@@ -80,21 +91,22 @@ export async function generateShareImage(
 
   // Draw title
   ctx.font = "bold 48px sans-serif";
-  ctx.fillText("Code Review Game by CodeRabbit", IMAGE_WIDTH / 2, 80);
+  const title = TITLE_BY_LOCALE[locale] || TITLE_BY_LOCALE.en;
+  ctx.fillText(title, IMAGE_WIDTH / 2, 80);
 
   // Draw score (large and prominent)
   ctx.font = "bold 120px sans-serif";
   ctx.fillStyle = "white";
-  const scoreSuffix = getScoreSuffixForLocale();
+  const scoreSuffix = SCORE_SUFFIX_BY_LOCALE[locale] || "";
   ctx.fillText(`${score}${scoreSuffix}`, IMAGE_WIDTH / 2, 250);
 
   // Draw language and level info
   ctx.font = "36px sans-serif";
   ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-  const displayName =
-    LANGUAGE_DISPLAY_NAMES[language] ||
+  const displayName = languageDisplayName ||
     language.charAt(0).toUpperCase() + language.slice(1);
-  ctx.fillText(`${displayName} - Level ${level}`, IMAGE_WIDTH / 2, 380);
+  const levelText = locale === "ja" ? `レベル ${level}` : `Level ${level}`;
+  ctx.fillText(`${displayName} - ${levelText}`, IMAGE_WIDTH / 2, 380);
 
   // Load and draw CodeRabbit icon
   console.log("Loading CodeRabbit icon...");
@@ -127,18 +139,6 @@ export async function generateShareImage(
       1.0
     );
   });
-}
-
-/**
- * Picks the localized suffix for score text
- */
-function getScoreSuffixForLocale(): string {
-  if (typeof navigator === "undefined" || !navigator.language) {
-    return "";
-  }
-
-  const locale = navigator.language.split("-")[0]?.toLowerCase();
-  return (locale && SCORE_SUFFIX_BY_LOCALE[locale]) ?? "";
 }
 
 /**
