@@ -7,7 +7,6 @@
  * Implements rate limiting, validation, and sanitization.
  */
 
-import type { Route } from "./+types/api.save-result";
 import { v4 as uuidv4 } from "uuid";
 
 import type {
@@ -24,6 +23,20 @@ import { sanitizeResultRequest } from "~/utils/sanitize";
 import { validateSaveResultRequest } from "~/utils/validation";
 
 /**
+ * Action function arguments type
+ */
+interface ActionArgs {
+  request: Request;
+  context: {
+    cloudflare?: {
+      env: {
+        RESULTS_KV: KVNamespace;
+      };
+    };
+  };
+}
+
+/**
  * Handle POST /api/save-result
  *
  * Process flow:
@@ -34,7 +47,7 @@ import { validateSaveResultRequest } from "~/utils/validation";
  * 5. Save to KV storage
  * 6. Return result URL
  */
-export async function action({ request, context }: Route.ActionArgs) {
+export async function action({ request, context }: ActionArgs) {
   try {
     // Get environment bindings
     const env = context.cloudflare?.env as {

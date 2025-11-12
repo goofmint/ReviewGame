@@ -11,17 +11,30 @@
  * URL does NOT include locale (not /:locale/result/:id)
  */
 
-import { json } from "@remix-run/cloudflare";
-import type {
-  LoaderFunctionArgs,
-  MetaFunction,
-} from "@remix-run/cloudflare";
-import { useLoaderData, Link } from "@remix-run/react";
+import { useLoaderData, Link } from "react-router";
+import type { MetaFunction } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEffect } from "react";
 
 import type { SavedResult } from "~/types/result";
 import { isValidUUID } from "~/utils/validation";
+import { initI18n } from "~/utils/i18n.client";
+
+/**
+ * Loader function arguments type
+ */
+interface LoaderArgs {
+  params: {
+    id?: string;
+  };
+  context: {
+    cloudflare?: {
+      env: {
+        RESULTS_KV: KVNamespace;
+      };
+    };
+  };
+}
 
 /**
  * Load saved result from KV storage
@@ -29,7 +42,7 @@ import { isValidUUID } from "~/utils/validation";
  * Validates UUID format and retrieves data from KV.
  * Returns 404 if UUID is invalid or data not found.
  */
-export async function loader({ params, context }: LoaderFunctionArgs) {
+export async function loader({ params, context }: LoaderArgs): Promise<SavedResult> {
   const { id } = params;
 
   // Validate UUID format
@@ -55,7 +68,7 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
 
   // Parse and return result
   const result: SavedResult = JSON.parse(resultJson);
-  return json(result);
+  return result;
 }
 
 /**
@@ -164,7 +177,7 @@ export default function ResultPage() {
                 {t("strengths")}
               </h3>
               <ul className="space-y-2">
-                {result.strengths.map((strength, index) => (
+                {result.strengths.map((strength: string, index: number) => (
                   <li
                     key={index}
                     className="flex items-start text-gray-700 dark:text-gray-300"
@@ -186,7 +199,7 @@ export default function ResultPage() {
                 {t("improvements")}
               </h3>
               <ul className="space-y-2">
-                {result.improvements.map((improvement, index) => (
+                {result.improvements.map((improvement: string, index: number) => (
                   <li
                     key={index}
                     className="flex items-start text-gray-700 dark:text-gray-300"

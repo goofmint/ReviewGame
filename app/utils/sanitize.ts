@@ -134,17 +134,11 @@ export function sanitizeArray(
  * });
  * ```
  */
-export function sanitizeResultRequest(data: {
+export function sanitizeResultRequest<T extends {
   feedback: string;
   strengths: string[];
   improvements: string[];
-  [key: string]: unknown;
-}): {
-  feedback: string;
-  strengths: string[];
-  improvements: string[];
-  [key: string]: unknown;
-} {
+}>(data: T): T {
   return {
     ...data,
     feedback: sanitizeText(data.feedback, 5000),

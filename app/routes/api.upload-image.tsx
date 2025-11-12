@@ -7,7 +7,6 @@
  * Returns the public URL of the uploaded image.
  */
 
-import type { Route } from "./+types/api.upload-image";
 import {
   uploadImageToR2,
   generateStorageKey,
@@ -28,6 +27,18 @@ interface Env {
 }
 
 /**
+ * Action function arguments type
+ */
+interface ActionArgs {
+  request: Request;
+  context: {
+    cloudflare?: {
+      env: Env;
+    };
+  };
+}
+
+/**
  * Request body structure
  */
 interface UploadImageRequest {
@@ -41,7 +52,7 @@ interface UploadImageRequest {
 /**
  * Handle POST /api/upload-image
  */
-export async function action({ request, context }: Route.ActionArgs) {
+export async function action({ request, context }: ActionArgs) {
   try {
     // Check content type
     const contentType = request.headers.get("content-type");
