@@ -182,8 +182,6 @@ export function ShareButton({
     }
   };
 
-  const hasError = shareState === "error" && shareError !== "";
-
   return (
     <div className={className}>
       <button
@@ -214,8 +212,15 @@ export function ShareButton({
       </button>
 
       {/* Error/Info message display */}
-      {hasError && shareError && (
-        <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">
+      {shareError && (
+        <p
+          className={`mt-2 text-sm ${
+            shareState === "error"
+              ? "text-red-600 dark:text-red-400"
+              : "text-blue-600 dark:text-blue-400"
+          }`}
+          role={shareState === "error" ? "alert" : "status"}
+        >
           {shareError}
         </p>
       )}

@@ -30,5 +30,9 @@
   "hint3": "Is type checking necessary?",
   "hint4": "Are boundary value tests considered?",
   "hint5": "Click on code lines to add line numbers to your review",
-  "hint6": "Click on requirements to add Markdown headings"
+  "hint6": "Click on requirements to add Markdown headings",
+  "meta": {
+    "titleTemplate": "{{language}} Level {{level}} - Code Review Game",
+    "description": "Review code and improve your skills"
+  }
 }

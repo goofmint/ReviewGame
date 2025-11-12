@@ -12,7 +12,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams, useFetcher, type LoaderFunctionArgs } from "react-router";
+import { Link, useNavigate, useParams, useFetcher, type LoaderFunctionArgs, type MetaFunction } from "react-router";
 import { useTranslation } from "react-i18next";
 import { problems, availableLocales } from "~/data/problems";
 import { ErrorCard } from "~/components/ErrorCard";
@@ -24,8 +24,9 @@ import { initI18n } from "~/utils/i18n.client";
 import type { EvaluationResult } from "~/types/problem";
 import { evaluate } from "~/utils/evaluate";
 import type { EvaluationRequestBody } from "~/types/evaluate";
+import { i18n } from "~/i18n.server";
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ params, request }: LoaderFunctionArgs) {
   const { locale, lang, level } = params;
 
   // Validate locale, language and level parameters
@@ -37,17 +38,41 @@ export async function loader({ params }: LoaderFunctionArgs) {
     throw new Response("Invalid language or level", { status: 404 });
   }
 
-  return { locale, lang, level };
+  // Load translations for meta tags
+  const t = await i18n.getFixedT(request, 'game', locale);
+
+  // Get language display name
+  const tCommon = await i18n.getFixedT(request, 'common', locale);
+  const languageDisplayName = tCommon(`language.${lang}`, lang);
+
+  const metaTitle = t('meta.titleTemplate', {
+    language: languageDisplayName,
+    level,
+  });
+  const metaDescription = t('meta.description');
+
+  return {
+    locale,
+    lang,
+    level,
+    metaTitle,
+    metaDescription,
+  };
 }
 
-export function meta({ params }: { params: { locale: string; lang: string; level: string } }) {
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  if (!data) {
+    return [
+      { title: "Code Review Game" },
+      { name: "description", content: "Review code and improve your skills" },
+    ];
+  }
+
   return [
-    {
-      title: `${params.lang} Level ${params.level} - Code Review Game`,
-    },
-    { name: "description", content: "Review code and improve your skills" },
+    { title: data.metaTitle },
+    { name: "description", content: data.metaDescription },
   ];
-}
+};
 
 /**
  * レビュー評価のアクション
@@ -101,12 +126,20 @@ export default function ProblemPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [i18nReady, setI18nReady] = useState(false);
+  const [i18nError, setI18nError] = useState(false);
 
   useEffect(() => {
     if (locale) {
-      initI18n(locale).then(() => {
-        setI18nReady(true);
-      });
+      initI18n(locale)
+        .then(() => {
+          setI18nReady(true);
+          setI18nError(false);
+        })
+        .catch((err) => {
+          console.error("Failed to initialize i18n:", err);
+          setI18nReady(false);
+          setI18nError(true);
+        });
     }
   }, [locale]);
 
@@ -126,6 +159,28 @@ export default function ProblemPage() {
       });
     }
   }, [fetcher.state, fetcher.data, navigate, locale, lang, level, review]);
+
+  // Handle i18n initialization error
+  if (i18nError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="max-w-md p-8 bg-red-50 dark:bg-red-900/20 rounded-lg">
+          <h2 className="text-xl font-bold text-red-900 dark:text-red-100 mb-2">
+            Failed to load translations
+          </h2>
+          <p className="text-red-700 dark:text-red-300 mb-4">
+            Unable to initialize the language settings. Please refresh the page or try a different language.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!i18nReady || !ready) {
     return <div className="min-h-screen flex items-center justify-center">
