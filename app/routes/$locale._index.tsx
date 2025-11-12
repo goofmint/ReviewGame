@@ -6,7 +6,7 @@
  * Provides instructions on how to play the game
  */
 
-import { Link, useParams, json, type LoaderFunctionArgs } from "react-router";
+import { Link, useParams, type LoaderFunctionArgs } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { availableLanguages, availableLocales } from "~/data/problems";
@@ -22,7 +22,7 @@ export async function loader({ params }: LoaderFunctionArgs) {
     throw new Response("Invalid locale", { status: 404 });
   }
 
-  return json({ locale });
+  return { locale };
 }
 
 export default function LanguageSelection() {
