@@ -17,7 +17,7 @@ export const i18n = new RemixI18Next({
   },
   i18next: {
     defaultNS: 'common',
-    ns: ['common', 'game', 'feedback', 'share'],
+    ns: ['common', 'game', 'feedback', 'share', 'result'],
   },
   backend: {
     loadPath: './public/locales/{{lng}}/{{ns}}.json',
