@@ -110,6 +110,23 @@ export default function ProblemPage() {
     }
   }, [locale]);
 
+  /**
+   * 評価完了時の処理
+   * 結果画面に遷移
+   */
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data) {
+      const result = fetcher.data as EvaluationResult;
+      console.log({ result });
+      navigate(`/${locale}/${lang}/${level}/result`, {
+        state: {
+          review,
+          ...result,
+        },
+      });
+    }
+  }, [fetcher.state, fetcher.data, navigate, locale, lang, level, review]);
+
   if (!i18nReady || !ready) {
     return <div className="min-h-screen flex items-center justify-center">
       <div className="text-xl">Loading...</div>
@@ -196,23 +213,6 @@ export default function ProblemPage() {
       setIsSubmitting(false);
     }
   };
-
-  /**
-   * 評価完了時の処理
-   * 結果画面に遷移
-   */
-  useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data) {
-      const result = fetcher.data as EvaluationResult;
-      console.log({ result });
-      navigate(`/${locale}/${lang}/${level}/result`, {
-        state: {
-          review,
-          ...result,
-        },
-      });
-    }
-  }, [fetcher.state, fetcher.data, navigate, locale, lang, level, review]);
 
   /**
    * コードの行がクリックされた時の処理
