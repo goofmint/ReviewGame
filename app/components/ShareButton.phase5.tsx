@@ -95,38 +95,78 @@ export function ShareButtonPhase5({
 
   /**
    * Handle share button click
-   * Generates image, uploads it, saves result, then shares
+   * Full flow: Generate image → Upload to R2 → Save to KV → Share on X
    */
   const handleShare = async () => {
     try {
       setShareError("");
       setShareState("generating");
 
-      // Use provided image URL or generate a placeholder
-      // In real implementation, image should be uploaded to R2 first
-      const imageUrl =
-        providedImageUrl ||
-        `https://example.com/share/${language}/${level}/${Date.now()}.png`;
+      // If imageUrl is provided, skip generation and upload
+      if (providedImageUrl) {
+        setGeneratedImageUrl(providedImageUrl);
+        saveResultToKV(providedImageUrl);
+        return;
+      }
 
-      setGeneratedImageUrl(imageUrl);
-
-      // Save result using useFetcher
-      const saveData = {
+      // Step 1: Generate share image (client-side)
+      const languageDisplayName = t(`common:language.${language}`, language);
+      const imageBlob = await generateShareImage(
         score,
         language,
-        level: parseInt(level, 10),
+        level,
         locale,
-        feedback,
-        strengths,
-        improvements,
-        imageUrl,
+        languageDisplayName
+      );
+
+      // Step 2: Convert to base64 for upload
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result as string;
+        const base64Image = base64Data.split(",")[1]; // Remove data:image/png;base64, prefix
+
+        // Step 3: Upload to R2 using existing action
+        try {
+          const uploadResponse = await fetch(window.location.href, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              imageData: base64Image,
+              score,
+              language,
+              level,
+              locale,
+            }),
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error("Failed to upload image to R2");
+          }
+
+          const uploadResult = await uploadResponse.json();
+          const uploadedImageUrl = uploadResult.imageUrl;
+
+          if (!uploadedImageUrl) {
+            throw new Error("No image URL returned from upload");
+          }
+
+          setGeneratedImageUrl(uploadedImageUrl);
+
+          // Step 4: Save result to KV with uploaded image URL
+          saveResultToKV(uploadedImageUrl);
+        } catch (uploadError) {
+          console.error("Image upload error:", uploadError);
+          throw uploadError;
+        }
       };
 
-      fetcher.submit(saveData, {
-        method: "POST",
-        action: "/api/save-result",
-        encType: "application/json",
-      });
+      reader.onerror = () => {
+        throw new Error("Failed to convert image to base64");
+      };
+
+      reader.readAsDataURL(imageBlob);
     } catch (error) {
       console.error("Share preparation error:", error);
       setShareState("error");
@@ -138,6 +178,28 @@ export function ShareButtonPhase5({
         setShareError("");
       }, 5000);
     }
+  };
+
+  /**
+   * Save result to KV storage
+   */
+  const saveResultToKV = (imageUrl: string) => {
+    const saveData = {
+      score,
+      language,
+      level: parseInt(level, 10),
+      locale,
+      feedback,
+      strengths,
+      improvements,
+      imageUrl,
+    };
+
+    fetcher.submit(saveData, {
+      method: "POST",
+      action: "/api/save-result",
+      encType: "application/json",
+    });
   };
 
   /**

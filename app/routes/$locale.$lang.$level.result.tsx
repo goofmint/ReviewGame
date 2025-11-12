@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { recordAttempt } from "~/utils/progress";
 import { problems, availableLocales } from "~/data/problems";
 import { PASSING_SCORE } from "~/utils/constants";
-import { ShareButton } from "~/components/ShareButton";
+import { ShareButtonPhase5 } from "~/components/ShareButton.phase5";
 import { initI18n } from "~/utils/i18n.client";
 import {
   uploadImageToR2,
@@ -350,11 +350,14 @@ export default function ResultPage() {
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
               {t('feedback:shareTitle')}
             </h3>
-            <ShareButton
+            <ShareButtonPhase5
               score={state.score}
               language={lang}
               level={level}
               locale={locale}
+              feedback={state.feedback}
+              strengths={state.strengths || []}
+              improvements={state.improvements || []}
               className="inline-block"
             />
           </div>
