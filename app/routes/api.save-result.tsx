@@ -7,8 +7,7 @@
  * Implements rate limiting, validation, and sanitization.
  */
 
-import { json } from "react-router";
-import type { ActionFunctionArgs } from "react-router";
+import type { Route } from "./+types/api.save-result";
 import { v4 as uuidv4 } from "uuid";
 
 import type {
@@ -35,7 +34,7 @@ import { validateSaveResultRequest } from "~/utils/validation";
  * 5. Save to KV storage
  * 6. Return result URL
  */
-export async function action({ request, context }: ActionFunctionArgs) {
+export async function action({ request, context }: Route.ActionArgs) {
   try {
     // Get environment bindings
     const env = context.cloudflare?.env as {
@@ -43,7 +42,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     } | undefined;
 
     if (!env?.RESULTS_KV) {
-      return json(
+      return Response.json(
         { error: "KV namespace not configured" },
         { status: 500 }
       );
@@ -59,7 +58,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     );
 
     if (!rateLimitResult.allowed) {
-      return json(
+      return Response.json(
         { error: "Too many requests. Please try again later." },
         {
           status: 429,
@@ -77,7 +76,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     const validation = validateSaveResultRequest(body);
     if (!validation.valid) {
-      return json(
+      return Response.json(
         { error: "Validation failed", errors: validation.errors },
         { status: 400 }
       );
@@ -120,7 +119,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       resultUrl,
     };
 
-    return json(response, {
+    return Response.json(response, {
       headers: {
         "X-RateLimit-Limit": "5",
         "X-RateLimit-Remaining": rateLimitResult.remaining.toString(),
@@ -131,7 +130,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     console.error("Save result error:", error);
 
     // Return generic error message (don't expose internal details)
-    return json(
+    return Response.json(
       { error: "Failed to save result. Please try again." },
       { status: 500 }
     );
@@ -140,5 +139,5 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 // Disable GET requests (only POST is allowed)
 export async function loader() {
-  return json({ error: "Method not allowed" }, { status: 405 });
+  return Response.json({ error: "Method not allowed" }, { status: 405 });
 }

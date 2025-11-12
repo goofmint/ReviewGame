@@ -7,8 +7,7 @@
  * Returns the public URL of the uploaded image.
  */
 
-import { json } from "react-router";
-import type { ActionFunctionArgs } from "react-router";
+import type { Route } from "./+types/api.upload-image";
 import {
   uploadImageToR2,
   generateStorageKey,
@@ -42,12 +41,12 @@ interface UploadImageRequest {
 /**
  * Handle POST /api/upload-image
  */
-export async function action({ request, context }: ActionFunctionArgs) {
+export async function action({ request, context }: Route.ActionArgs) {
   try {
     // Check content type
     const contentType = request.headers.get("content-type");
     if (!contentType || !contentType.includes("application/json")) {
-      return json(
+      return Response.json(
         { error: "Content-Type must be application/json" },
         { status: 400 }
       );
@@ -58,7 +57,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     // Validate required fields
     if (!body.imageData || !body.language || !body.level) {
-      return json(
+      return Response.json(
         { error: "Missing required fields: imageData, language, level" },
         { status: 400 }
       );
@@ -75,7 +74,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       score < 0 ||
       score > 100
     ) {
-      return json(
+      return Response.json(
         { error: "Score must be a number between 0 and 100" },
         { status: 400 }
       );
@@ -84,7 +83,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // Validate image payload
     const validatedImage = validateBase64ImagePayload(body.imageData);
     if (!validatedImage) {
-      return json(
+      return Response.json(
         { error: "Invalid or too large imageData" },
         { status: 400 }
       );
@@ -95,7 +94,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const bucket = env?.SHARE_IMAGES;
     if (!bucket) {
       console.error("SHARE_IMAGES bucket binding is missing");
-      return json(
+      return Response.json(
         { error: "Image storage configuration is missing" },
         { status: 500 }
       );
@@ -122,7 +121,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const imageUrl = getPublicUrl(storageKey, publicUrl);
 
     // Return result
-    return json(
+    return Response.json(
       { imageUrl },
       {
         headers: {
@@ -136,7 +135,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error occurred";
 
-    return json(
+    return Response.json(
       { error: `Failed to upload image: ${errorMessage}` },
       { status: 500 }
     );
@@ -145,5 +144,5 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 // Disable GET requests
 export async function loader() {
-  return json({ error: "Method not allowed" }, { status: 405 });
+  return Response.json({ error: "Method not allowed" }, { status: 405 });
 }
