@@ -14,8 +14,21 @@
   "reviewPlaceholder": "Write your code review here...\n\nHint: Click on line numbers or requirements to automatically insert templates.",
   "submitting": "Evaluating...",
   "lineReference": "Line {{line}}: ",
-  "requirementReference": "Regarding requirement \"{{requirement}}\": ",
+  "requirementReference": "## Regarding requirement \"{{requirement}}\"\n\n",
   "languageNotFound": "Language not found",
   "startChallenge": "Start →",
-  "noProblems": "No problems available for this language yet."
+  "noProblems": "No problems available for this language yet.",
+  "problemNotFound": "Problem not found",
+  "levelNotReady": "This level is not ready yet",
+  "levelLocked": "This level is still locked",
+  "reviewRequired": "Please enter your review",
+  "reviewTooShort": "Review must be at least 10 characters",
+  "evaluationError": "An error occurred during evaluation. Please try again.",
+  "hints": "Hints",
+  "hint1": "Check if all requirements are met",
+  "hint2": "Is error handling appropriate?",
+  "hint3": "Is type checking necessary?",
+  "hint4": "Are boundary value tests considered?",
+  "hint5": "Click on code lines to add line numbers to your review",
+  "hint6": "Click on requirements to add Markdown headings"
 }
