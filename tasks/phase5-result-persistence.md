@@ -356,38 +356,359 @@ const ogTitle = locale === 'ja'
 - **ユーザー識別情報**: 保存しない
 - **IPアドレス**: 記録しない
 
+### レート制限
+
+**実装方法**: KVベースの固定ウィンドウカウンター
+
+#### 仕様
+- **制限**: 5リクエスト/分（IPアドレスベース）
+- **KVキー**: `ratelimit:save-result:${ipAddress}`
+- **TTL**: 60秒
+- **カウント方法**: インクリメント＋TTL設定
+
+#### 実装例
+
+```typescript
+// app/utils/rateLimit.ts
+interface RateLimitConfig {
+  limit: number;           // 最大リクエスト数
+  windowSeconds: number;   // 時間ウィンドウ（秒）
+}
+
+async function checkRateLimit(
+  kv: KVNamespace,
+  key: string,
+  config: RateLimitConfig
+): Promise<{ allowed: boolean; remaining: number }> {
+  const current = await kv.get(key);
+  const count = current ? parseInt(current, 10) : 0;
+
+  if (count >= config.limit) {
+    return { allowed: false, remaining: 0 };
+  }
+
+  // インクリメント
+  await kv.put(key, (count + 1).toString(), {
+    expirationTtl: config.windowSeconds
+  });
+
+  return { allowed: true, remaining: config.limit - count - 1 };
+}
+
+// 使用例（api.save-result.tsxで）
+const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
+const rateLimitKey = `ratelimit:save-result:${clientIp}`;
+const rateLimitConfig = { limit: 5, windowSeconds: 60 };
+
+const { allowed, remaining } = await checkRateLimit(
+  context.env.RESULTS_KV,
+  rateLimitKey,
+  rateLimitConfig
+);
+
+if (!allowed) {
+  return json(
+    { error: 'Too many requests. Please try again later.' },
+    {
+      status: 429,
+      headers: {
+        'Retry-After': '60',
+        'X-RateLimit-Limit': '5',
+        'X-RateLimit-Remaining': '0'
+      }
+    }
+  );
+}
+```
+
+#### 考慮事項
+- **Eventual Consistency**: KVは最終的一貫性のため、完全な保証はできない
+- **代替案**: より厳密な制限が必要な場合はDurable Objectsを使用
+- **IP取得**: Cloudflareの`CF-Connecting-IP`ヘッダーを使用
+
+### XSS対策
+
+**実装方法**: サーバーサイドでのサニタイゼーション + Reactのデフォルトエスケープ
+
+#### 使用ライブラリ
+- **サーバーサイド**: `sanitize-html` (npm package)
+- **バージョン**: `^2.11.0` 以上
+- **インストール**: `npm install sanitize-html @types/sanitize-html`
+
+#### サニタイゼーション対象フィールド
+- `feedback`
+- `strengths`（配列の各要素）
+- `improvements`（配列の各要素）
+
+#### 実装例
+
+```typescript
+// app/utils/sanitize.ts
+import sanitizeHtml from 'sanitize-html';
+
+interface SanitizeOptions {
+  allowedTags: string[];
+  allowedAttributes: Record<string, string[]>;
+  maxLength: number;
+}
+
+const DEFAULT_SANITIZE_OPTIONS: SanitizeOptions = {
+  allowedTags: [], // HTMLタグを一切許可しない（プレーンテキストのみ）
+  allowedAttributes: {},
+  maxLength: 5000
+};
+
+export function sanitizeText(text: string, maxLength: number = 5000): string {
+  // 1. 長さチェック
+  if (text.length > maxLength) {
+    text = text.substring(0, maxLength);
+  }
+
+  // 2. HTMLサニタイゼーション（全タグ削除）
+  const sanitized = sanitizeHtml(text, {
+    allowedTags: [],
+    allowedAttributes: {},
+    disallowedTagsMode: 'recursiveEscape'
+  });
+
+  // 3. 追加のエスケープ（念のため）
+  return sanitized
+    .replace(/[<>]/g, '') // 残った<>を削除
+    .trim();
+}
+
+export function sanitizeArray(
+  items: string[],
+  maxItems: number = 10,
+  maxItemLength: number = 500
+): string[] {
+  // 配列長チェック
+  const limitedItems = items.slice(0, maxItems);
+
+  // 各要素をサニタイゼーション
+  return limitedItems.map(item => sanitizeText(item, maxItemLength));
+}
+
+// 使用例（api.save-result.tsxで）
+import { sanitizeText, sanitizeArray } from '~/utils/sanitize';
+
+const sanitizedData = {
+  ...body,
+  feedback: sanitizeText(body.feedback, 5000),
+  strengths: sanitizeArray(body.strengths, 10, 500),
+  improvements: sanitizeArray(body.improvements, 10, 500)
+};
+```
+
+#### クライアントサイド
+- **Reactのデフォルト**: JSX内での`{variable}`はデフォルトでエスケープされる
+- **dangerouslySetInnerHTML**: 絶対に使用しない
+- **追加対策**: サーバーから受け取ったデータも信頼せず、表示時にエスケープ
+
+### CSRF対策
+
+**実装方法**: SameSite Cookie + Cloudflare管理の保護
+
+#### 戦略
+
+**プライマリ**: SameSite Cookie属性のみに依存
+- `/api/save-result` はステートレスなPOSTエンドポイント
+- 認証不要（誰でも結果を保存可能）
+- Cookieベースの認証を使用していない
+
+**理由**:
+1. **認証不要**: このエンドポイントはユーザー認証を必要としない
+2. **スパム対策**: レート制限で対応
+3. **データの性質**: 個人情報を含まない公開データ
+4. **Cloudflare保護**: Cloudflare Workersが自動的に一部のCSRF攻撃を軽減
+
+#### 実装不要な理由
+
+```typescript
+// このエンドポイントはCSRFトークンを必要としない理由：
+// 1. セッションCookieを使用していない
+// 2. 認証トークンを使用していない
+// 3. ユーザー固有のデータを変更しない
+// 4. 公開データの作成のみ（誰でも実行可能）
+```
+
+#### 代替案（より厳密な保護が必要な場合）
+
+**オプション1**: Custom Header検証
+
+```typescript
+// クライアント側
+fetcher.submit(data, {
+  method: 'POST',
+  action: '/api/save-result',
+  headers: {
+    'X-Requested-With': 'XMLHttpRequest' // カスタムヘッダー
+  }
+});
+
+// サーバー側（api.save-result.tsx）
+export async function action({ request }: ActionFunctionArgs) {
+  // CSRFチェック（オプション）
+  const requestedWith = request.headers.get('X-Requested-With');
+  if (requestedWith !== 'XMLHttpRequest') {
+    return json({ error: 'Invalid request' }, { status: 403 });
+  }
+  // ... 通常の処理
+}
+```
+
+**オプション2**: Originヘッダー検証
+
+```typescript
+export async function action({ request }: ActionFunctionArgs) {
+  const origin = request.headers.get('Origin');
+  const allowedOrigins = ['https://review-game.com', 'http://localhost:3000'];
+
+  if (origin && !allowedOrigins.includes(origin)) {
+    return json({ error: 'Invalid origin' }, { status: 403 });
+  }
+  // ... 通常の処理
+}
+```
+
+#### 実装推奨
+
+現時点では**CSRF対策は不要**ですが、将来的にユーザー認証を追加する場合は以下を実装：
+- SameSite=Strict または Lax Cookie
+- Double Submit Cookie パターン
+- または、Anti-CSRF トークン
+
 ### バリデーション
 
 #### 入力検証
 
-- スコア範囲チェック（0〜100）
-- 言語の許可リスト確認
-- レベル範囲チェック（1以上）
-- 文字列長制限
-- 配列要素数制限
-- URL形式検証（HTTPS、R2ドメイン）
+```typescript
+// app/utils/validation.ts
+import { availableLanguages } from '~/data/problems';
+
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
+export function validateSaveResultRequest(body: any): {
+  valid: boolean;
+  errors: ValidationError[];
+} {
+  const errors: ValidationError[] = [];
+
+  // スコア
+  if (typeof body.score !== 'number' || body.score < 0 || body.score > 100) {
+    errors.push({ field: 'score', message: 'Score must be between 0 and 100' });
+  }
+
+  // 言語
+  if (!body.language || !availableLanguages.includes(body.language)) {
+    errors.push({ field: 'language', message: 'Invalid language' });
+  }
+
+  // レベル
+  if (typeof body.level !== 'number' || body.level < 1) {
+    errors.push({ field: 'level', message: 'Level must be 1 or greater' });
+  }
+
+  // ロケール
+  if (!body.locale || !['ja', 'en'].includes(body.locale)) {
+    errors.push({ field: 'locale', message: 'Locale must be "ja" or "en"' });
+  }
+
+  // feedback
+  if (!body.feedback || typeof body.feedback !== 'string' || body.feedback.length > 5000) {
+    errors.push({ field: 'feedback', message: 'Feedback must be a string (max 5000 chars)' });
+  }
+
+  // strengths
+  if (!Array.isArray(body.strengths) || body.strengths.length < 1 || body.strengths.length > 10) {
+    errors.push({ field: 'strengths', message: 'Strengths must be an array (1-10 items)' });
+  } else {
+    body.strengths.forEach((item: any, index: number) => {
+      if (typeof item !== 'string' || item.length > 500) {
+        errors.push({ field: `strengths[${index}]`, message: 'Each strength must be a string (max 500 chars)' });
+      }
+    });
+  }
+
+  // improvements
+  if (!Array.isArray(body.improvements) || body.improvements.length < 1 || body.improvements.length > 10) {
+    errors.push({ field: 'improvements', message: 'Improvements must be an array (1-10 items)' });
+  } else {
+    body.improvements.forEach((item: any, index: number) => {
+      if (typeof item !== 'string' || item.length > 500) {
+        errors.push({ field: `improvements[${index}]`, message: 'Each improvement must be a string (max 500 chars)' });
+      }
+    });
+  }
+
+  // imageUrl
+  if (!body.imageUrl || typeof body.imageUrl !== 'string') {
+    errors.push({ field: 'imageUrl', message: 'Image URL is required' });
+  } else {
+    try {
+      const url = new URL(body.imageUrl);
+      if (url.protocol !== 'https:') {
+        errors.push({ field: 'imageUrl', message: 'Image URL must use HTTPS' });
+      }
+      // R2ドメインのチェック（環境変数から取得）
+      const r2Domain = process.env.R2_PUBLIC_URL || '';
+      if (r2Domain && !body.imageUrl.startsWith(r2Domain)) {
+        errors.push({ field: 'imageUrl', message: 'Image URL must be from R2 bucket' });
+      }
+    } catch (e) {
+      errors.push({ field: 'imageUrl', message: 'Invalid image URL format' });
+    }
+  }
+
+  // 総ペイロードサイズチェック
+  const payloadSize = new Blob([JSON.stringify(body)]).size;
+  if (payloadSize > 32768) { // 32KB
+    errors.push({ field: 'payload', message: 'Total payload size exceeds 32KB' });
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors
+  };
+}
+```
 
 #### UUID検証
 
 ```typescript
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-if (!id || !UUID_REGEX.test(id)) {
+export function isValidUUID(id: string): boolean {
+  return UUID_V4_REGEX.test(id);
+}
+
+// 使用例（result.$id.tsxで）
+if (!id || !isValidUUID(id)) {
   throw new Response('Not Found', { status: 404 });
 }
 ```
 
-### XSS対策
-
-- Reactのデフォルトエスケープ機能を活用
-- フィードバックテキストのサニタイゼーション
-- ユーザー入力を直接HTMLに挿入しない
-
 ### データサイズ制限
 
-- 合計サイズ: 最大10KB程度
-- feedback: 最大5000文字
-- strengths/improvements: 各要素最大500文字
+**総ペイロードサイズ**: 最大32KB
+
+**フィールドごとの上限**:
+- **feedback**: 最大5,000文字（UTF-8で約10KB）
+- **strengths**: 配列、1〜10要素、各要素最大500文字（最大10要素 × 500文字 = 5,000文字、約10KB）
+- **improvements**: 配列、1〜10要素、各要素最大500文字（最大10要素 × 500文字 = 5,000文字、約10KB）
+- **その他メタデータ**: 約1-2KB（id, score, language, level, locale, imageUrl, timestamp, createdAt）
+
+**計算根拠**:
+- feedback: 5,000文字 × 2バイト（UTF-8平均） = 10KB
+- strengths: 10要素 × 500文字 × 2バイト = 10KB
+- improvements: 10要素 × 500文字 × 2バイト = 10KB
+- メタデータ: 1-2KB
+- **合計**: 約31-32KB
+
+バリデーション時にJSON.stringify()後のバイト数が32KB（32,768バイト）以下であることを確認します。
 
 ### UUID生成
 
@@ -402,11 +723,21 @@ if (!id || !UUID_REGEX.test(id)) {
 ### バックエンド
 
 - [ ] `app/types/result.ts`にデータ型を定義（`locale`フィールドを含む）
+- [ ] `app/utils/rateLimit.ts`にレート制限関数を実装（KVベース、5req/min）
+- [ ] `app/utils/sanitize.ts`にサニタイゼーション関数を実装（sanitize-html使用）
+- [ ] `app/utils/validation.ts`にバリデーション関数を実装（32KBチェック含む）
 - [ ] `app/routes/api.save-result.tsx`を実装（actionのみ）
+  - レート制限チェック
+  - バリデーション
+  - サニタイゼーション
+  - UUID生成
+  - KV保存
 - [ ] `app/routes/result.$id.tsx`を実装（loaderとcomponent）
-- [ ] バリデーション関数を実装（`locale`の検証を含む）
+  - UUID検証
+  - KV取得
+  - ロケール固定表示
 - [ ] KV操作のエラーハンドリング
-- [ ] UUID生成ユーティリティ
+- [ ] `sanitize-html`パッケージをインストール（`^2.11.0`）
 
 ### フロントエンド
 
@@ -427,11 +758,31 @@ if (!id || !UUID_REGEX.test(id)) {
 ### テスト
 
 - [ ] 結果保存APIのテスト
+  - [ ] 正常系（有効なデータ）
+  - [ ] バリデーションエラー（各フィールド）
+  - [ ] ペイロードサイズ超過（>32KB）
+  - [ ] レート制限（6回目のリクエストで429）
+  - [ ] XSS攻撃（`<script>`タグなど）
 - [ ] 結果表示ページのテスト
-- [ ] バリデーションのテスト
+  - [ ] 正常系（有効なUUID）
+  - [ ] 無効なUUID（404）
+  - [ ] 存在しないUUID（404）
+  - [ ] ロケール固定表示（ja/en）
+- [ ] サニタイゼーションのテスト
+  - [ ] HTMLタグの除去
+  - [ ] 特殊文字のエスケープ
+  - [ ] 長さ制限の適用
 - [ ] UUID検証のテスト
+  - [ ] 有効なUUID v4
+  - [ ] 無効な形式
+  - [ ] 他のバージョン（v1, v5）
 - [ ] 国際化のテスト
+  - [ ] 日本語で保存→日本語で表示
+  - [ ] 英語で保存→英語で表示
 - [ ] OGPタグの確認
+  - [ ] 日本語ロケールの場合
+  - [ ] 英語ロケールの場合
+  - [ ] 画像URLの正しさ
 
 ### 統合
 
