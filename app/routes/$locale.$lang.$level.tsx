@@ -12,24 +12,40 @@
  */
 
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams, useFetcher } from "react-router";
-import { problems } from "~/data/problems";
+import { Link, useNavigate, useParams, useFetcher, type LoaderFunctionArgs } from "react-router";
+import { useTranslation } from "react-i18next";
+import { problems, availableLocales } from "~/data/problems";
 import { ErrorCard } from "~/components/ErrorCard";
 import { CodeDisplay } from "~/components/CodeDisplay";
 import { RequirementsDisplay } from "~/components/RequirementsDisplay";
 import { LoadingSpinner } from "~/components/LoadingSpinner";
 import { isLevelUnlocked } from "~/utils/progress";
-import type { Route } from "./+types/$lang.$level";
+import { initI18n } from "~/utils/i18n.client";
 import type { EvaluationResult } from "~/types/problem";
 import { evaluate } from "~/utils/evaluate";
 import type { EvaluationRequestBody } from "~/types/evaluate";
 
-export function meta({ params }: Route.MetaArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
+  const { locale, lang, level } = params;
+
+  // Validate locale, language and level parameters
+  if (!locale || !availableLocales.includes(locale)) {
+    throw new Response("Invalid locale", { status: 404 });
+  }
+
+  if (!lang || !level || !problems[locale]?.[lang]?.[level]) {
+    throw new Response("Invalid language or level", { status: 404 });
+  }
+
+  return { locale, lang, level };
+}
+
+export function meta({ params }: { params: { locale: string; lang: string; level: string } }) {
   return [
     {
-      title: `${params.lang} レベル${params.level} - コードレビューゲーム`,
+      title: `${params.lang} Level ${params.level} - Code Review Game`,
     },
-    { name: "description", content: "コードをレビューしてスキルアップ" },
+    { name: "description", content: "Review code and improve your skills" },
   ];
 }
 
@@ -43,7 +59,7 @@ export async function action({
   context,
 }: {
   request: Request;
-  params: { lang?: string; level?: string };
+  params: { locale?: string; lang?: string; level?: string };
   context?: { cloudflare?: { env?: Record<string, unknown> } };
 }) {
   if (request.method !== "POST") {
@@ -77,33 +93,49 @@ export async function action({
 }
 
 export default function ProblemPage() {
-  const { lang, level } = useParams();
+  const { locale, lang, level } = useParams();
+  const { t, ready } = useTranslation(['common', 'game']);
   const navigate = useNavigate();
   const fetcher = useFetcher();
   const [review, setReview] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [i18nReady, setI18nReady] = useState(false);
+
+  useEffect(() => {
+    if (locale) {
+      initI18n(locale).then(() => {
+        setI18nReady(true);
+      });
+    }
+  }, [locale]);
+
+  if (!i18nReady || !ready) {
+    return <div className="min-h-screen flex items-center justify-center">
+      <div className="text-xl">Loading...</div>
+    </div>;
+  }
 
   // パラメータの検証と問題の存在確認
-  if (!lang || !level || !(lang in problems)) {
+  if (!locale || !lang || !level || !problems[locale]?.[lang]) {
     return (
       <ErrorCard
-        title="問題が見つかりません"
-        linkTo="/"
-        linkText="言語選択に戻る"
+        title={t('game:problemNotFound', 'Problem not found')}
+        linkTo={`/${locale}`}
+        linkText={t('common:button.backToLanguages')}
       />
     );
   }
 
-  const langProblems = problems[lang as keyof typeof problems];
+  const langProblems = problems[locale][lang];
   const problem = langProblems[level as keyof typeof langProblems];
 
   if (!problem) {
     return (
       <ErrorCard
-        title="このレベルの問題はまだ準備されていません"
-        linkTo={`/${lang}`}
-        linkText="レベル選択に戻る"
+        title={t('game:levelNotReady', 'This level is not ready yet')}
+        linkTo={`/${locale}/${lang}`}
+        linkText={t('common:button.backToLevels')}
       />
     );
   }
@@ -113,9 +145,9 @@ export default function ProblemPage() {
   if (!unlocked) {
     return (
       <ErrorCard
-        title="このレベルはまだロックされています"
-        linkTo={`/${lang}`}
-        linkText="レベル選択に戻る"
+        title={t('game:levelLocked', 'This level is still locked')}
+        linkTo={`/${locale}/${lang}`}
+        linkText={t('common:button.backToLevels')}
       />
     );
   }
@@ -129,12 +161,12 @@ export default function ProblemPage() {
 
     // レビュー内容のバリデーション
     if (!review.trim()) {
-      setError("レビューを入力してください");
+      setError(t('game:reviewRequired', 'Please enter your review'));
       return;
     }
 
     if (review.trim().length < 10) {
-      setError("レビューは10文字以上入力してください");
+      setError(t('game:reviewTooShort', 'Review must be at least 10 characters'));
       return;
     }
 
@@ -146,10 +178,11 @@ export default function ProblemPage() {
         language: String(lang),
         level: String(level),
         review: review.trim(),
+        locale: String(locale),
       };
       fetcher.submit(body, {
         method: "post",
-        action: `/${lang}/${level}`,
+        action: `/${locale}/${lang}/${level}`,
         encType: "application/json",
       });
     } catch (err) {
@@ -157,7 +190,7 @@ export default function ProblemPage() {
       setError(
         err instanceof Error
           ? err.message
-          : "評価中にエラーが発生しました。もう一度お試しください。"
+          : t('game:evaluationError', 'An error occurred during evaluation. Please try again.')
       );
     } finally {
       setIsSubmitting(false);
@@ -172,21 +205,21 @@ export default function ProblemPage() {
     if (fetcher.state === "idle" && fetcher.data) {
       const result = fetcher.data as EvaluationResult;
       console.log({ result });
-      navigate(`/${lang}/${level}/result`, {
+      navigate(`/${locale}/${lang}/${level}/result`, {
         state: {
           review,
           ...result,
         },
       });
     }
-  }, [fetcher.state, fetcher.data, navigate, lang, level, review]);
+  }, [fetcher.state, fetcher.data, navigate, locale, lang, level, review]);
 
   /**
    * コードの行がクリックされた時の処理
    * 「コードの{行番号}行目: 」をレビュー入力エリアに挿入
    */
   const handleCodeLineClick = (lineNumber: number) => {
-    const template = `コードの${lineNumber}行目: `;
+    const template = t('game:lineReference', { line: lineNumber });
     setReview((prev) => (prev ? `${prev}\n${template}` : template));
   };
 
@@ -195,7 +228,7 @@ export default function ProblemPage() {
    * Markdown見出し形式で要件をレビュー入力エリアに挿入
    */
   const handleRequirementClick = (requirement: string) => {
-    const template = `## 要件「${requirement}」について\n\n`;
+    const template = t('game:requirementReference', { requirement });
     setReview((prev) => (prev ? `${prev}\n${template}` : template));
   };
 
@@ -203,17 +236,17 @@ export default function ProblemPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       {/* ローディング表示 */}
       {fetcher.state === "submitting" && (
-        <LoadingSpinner message="レビューを評価中..." />
+        <LoadingSpinner message={t('game:submitting')} />
       )}
 
       <div className="container mx-auto px-4 py-8">
         {/* ヘッダー */}
         <header className="mb-8">
           <Link
-            to={`/${lang}`}
+            to={`/${locale}/${lang}`}
             className="inline-block mb-4 text-blue-600 dark:text-blue-400 hover:underline"
           >
-            ← レベル選択に戻る
+            ← {t('common:button.backToLevels')}
           </Link>
           <div className="flex items-center justify-between">
             <div>
@@ -221,7 +254,7 @@ export default function ProblemPage() {
                 {problem.title}
               </h1>
               <p className="text-gray-600 dark:text-gray-300">
-                難易度: {"★".repeat(problem.difficulty)}
+                {t('game:difficulty')}: {"★".repeat(problem.difficulty)}
               </p>
             </div>
           </div>
@@ -235,7 +268,7 @@ export default function ProblemPage() {
               {/* 要件セクション */}
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                  📋 要件
+                  📋 {t('game:requirements')}
                 </h2>
                 <RequirementsDisplay
                   requirements={problem.requirements}
@@ -246,7 +279,7 @@ export default function ProblemPage() {
               {/* コードセクション */}
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                  💻 コード
+                  💻 {t('game:code')}
                 </h2>
                 <CodeDisplay
                   code={problem.code}
@@ -259,7 +292,7 @@ export default function ProblemPage() {
             {/* 右側: レビュー入力セクション */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 lg:sticky lg:top-8 lg:self-start">
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                ✍️ あなたのレビュー
+                ✍️ {t('game:yourReview')}
               </h2>
               <textarea
                 value={review}
@@ -268,7 +301,7 @@ export default function ProblemPage() {
                   setError("");
                 }}
                 className="w-full h-96 p-4 border border-gray-300 dark:border-gray-600 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                placeholder="コードの問題点を指摘してください...&#10;&#10;ヒント:&#10;- コードの行をクリックすると行番号が自動入力されます&#10;- 要件の項目をクリックするとMarkdown見出しが自動入力されます"
+                placeholder={t('game:reviewPlaceholder')}
               />
               {error && (
                 <p className="text-red-600 dark:text-red-400 text-sm mt-2">
@@ -280,7 +313,7 @@ export default function ProblemPage() {
                 disabled={isSubmitting || !review.trim()}
                 className="w-full mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-semibold"
               >
-                {isSubmitting ? "評価中..." : "レビューを送信"}
+                {isSubmitting ? t('game:submitting') : t('common:button.submit')}
               </button>
             </div>
           </div>
@@ -289,15 +322,15 @@ export default function ProblemPage() {
         {/* ヒントセクション */}
         <div className="max-w-4xl mx-auto mt-8 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            💡 ヒント
+            💡 {t('game:hints', 'Hints')}
           </h3>
           <ul className="list-disc list-inside space-y-1 text-gray-700 dark:text-gray-300">
-            <li>要件を満たしていない部分はないか確認しましょう</li>
-            <li>エラーハンドリングは適切ですか？</li>
-            <li>型チェックは必要ありませんか？</li>
-            <li>境界値のテストは考慮されていますか？</li>
-            <li>コードの行をクリックすると、レビューに行番号を追加できます</li>
-            <li>要件の項目をクリックすると、Markdown見出しを追加できます</li>
+            <li>{t('game:hint1', 'Check if all requirements are met')}</li>
+            <li>{t('game:hint2', 'Is error handling appropriate?')}</li>
+            <li>{t('game:hint3', 'Is type checking necessary?')}</li>
+            <li>{t('game:hint4', 'Are boundary value tests considered?')}</li>
+            <li>{t('game:hint5', 'Click on code lines to add line numbers to your review')}</li>
+            <li>{t('game:hint6', 'Click on requirements to add Markdown headings')}</li>
           </ul>
         </div>
       </div>
