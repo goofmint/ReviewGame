@@ -1,0 +1,30 @@
+{
+  "nav": {
+    "home": "Home",
+    "back": "Back"
+  },
+  "button": {
+    "submit": "Submit",
+    "retry": "Try Again",
+    "next": "Next Level",
+    "share": "Share",
+    "backToLanguages": "Back to Languages",
+    "backToLevels": "Back to Levels"
+  },
+  "tryChallenge": "Try Challenge",
+  "language": {
+    "javascript": "JavaScript",
+    "python": "Python",
+    "flutter": "Flutter",
+    "codeReviewGame": "Code Review Game"
+  },
+  "languageDescription": {
+    "javascript": "Foundation of web development",
+    "python": "Data analysis & AI development",
+    "flutter": "Mobile app development"
+  },
+  "locale": {
+    "ja": "日本語",
+    "en": "English"
+  }
+}
