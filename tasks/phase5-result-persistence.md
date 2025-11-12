@@ -24,8 +24,9 @@ Phase 5では、レビュー結果をCloudflare KVに永続保存し、ユニー
 interface SavedResult {
   id: string;               // UUID v4（URLパスとKVキーに直接使用）
   score: number;            // 0-100
-  language: string;         // プログラミング言語
+  language: string;         // プログラミング言語（"javascript" | "python" | "flutter"）
   level: number;            // レベル番号
+  locale: string;           // 表示言語（"ja" | "en"）- 保存時のロケールを記録
   feedback: string;         // LLMフィードバック
   strengths: string[];      // 良かった点
   improvements: string[];   // 改善点
@@ -40,8 +41,9 @@ interface SavedResult {
 ```typescript
 interface SaveResultRequest {
   score: number;
-  language: string;
+  language: string;         // プログラミング言語
   level: number;
+  locale: string;           // 保存時のロケール（"ja" | "en"）
   feedback: string;
   strengths: string[];
   improvements: string[];
@@ -67,11 +69,15 @@ interface SaveResultResponse {
 
 レビュー結果を保存して、ユニークなURLを生成します。
 
+**重要**: このAPIは直接fetch()で呼ぶのではなく、**`useFetcher()`** を使用して呼び出します。
+
 #### リクエスト
 
 **エンドポイント**: `POST /api/save-result`
 
 **Content-Type**: `application/json`
+
+**呼び出し方法**: `useFetcher()` を使用
 
 **ボディ**:
 ```typescript
@@ -79,6 +85,7 @@ interface SaveResultResponse {
   score: number;           // 0-100の整数
   language: string;        // "javascript" | "python" | "flutter"
   level: number;           // 1以上の整数
+  locale: string;          // "ja" | "en" - 保存時のロケール
   feedback: string;        // 最大5000文字
   strengths: string[];     // 配列、各要素最大500文字
   improvements: string[];  // 配列、各要素最大500文字
@@ -91,6 +98,7 @@ interface SaveResultResponse {
 - **score**: 0〜100の整数
 - **language**: 許可されたリスト（`problems.ts`の`availableLanguages`から取得）
 - **level**: 1以上の整数
+- **locale**: "ja" または "en"
 - **feedback**: 空でない文字列、5000文字以内
 - **strengths**: 配列、1〜10要素、各要素500文字以内
 - **improvements**: 配列、1〜10要素、各要素500文字以内
@@ -117,6 +125,35 @@ interface SaveResultResponse {
   { error: string }
   ```
 
+#### useFetcherでの呼び出し例
+
+```typescript
+// クライアントサイド（例：ShareButtonコンポーネント）
+import { useFetcher } from '@remix-run/react';
+
+const fetcher = useFetcher<SaveResultResponse>();
+
+// 結果を保存
+const saveResult = async (data: SaveResultRequest) => {
+  fetcher.submit(
+    data,
+    {
+      method: 'POST',
+      action: '/api/save-result',
+      encType: 'application/json'
+    }
+  );
+};
+
+// レスポンスの処理
+useEffect(() => {
+  if (fetcher.data?.success) {
+    const { resultUrl } = fetcher.data;
+    // resultUrlを使ってXシェア
+  }
+}, [fetcher.data]);
+```
+
 #### 処理フロー
 
 1. リクエストボディをバリデーション
@@ -132,6 +169,11 @@ interface SaveResultResponse {
 ### GET /result/:id
 
 保存されたレビュー結果を表示します。
+
+**重要**:
+- URLには**ロケールを含めません**（`/:locale/result/:id` ではなく `/result/:id`）
+- 結果ページの表示言語は**保存時の言語で固定**
+- ユーザーによる言語切り替えは不要
 
 #### URLパラメータ
 
@@ -238,17 +280,40 @@ try {
 
 ## 国際化対応
 
-### 翻訳が必要な要素
+### 基本方針
 
-結果ページの以下の要素を多言語対応します：
+結果ページは**保存時の言語で固定表示**します：
 
-#### 日本語 (ja)
+- **翻訳は不要**: 日本語で挑戦した場合は日本語のみ、英語で挑戦した場合は英語のみ表示
+- **URLにロケールなし**: `/result/:id`（`/:locale/result/:id`ではない）
+- **言語切り替えなし**: ユーザーによる言語切り替え機能は提供しない
+
+### 保存時の言語の記録
 
 ```typescript
+interface SavedResult {
+  // ...
+  locale: string;  // "ja" | "en" - 保存時のロケールを記録
+  // ...
+}
+```
+
+### 表示時の処理
+
+1. KVから`SavedResult`を取得
+2. `locale`フィールドを読み取り
+3. そのロケールで固定表示（`i18n.changeLanguage(result.locale)`）
+4. UIテキストは既存のi18n設定を使用
+
+### 必要な翻訳リソース
+
+既存の翻訳リソースを活用：
+
+```typescript
+// app/locales/ja.ts
 {
   result: {
     title: "Code Review Game - {score}点獲得！",
-    score: "{score}点",
     feedback: "フィードバック",
     strengths: "良かった点",
     improvements: "改善点",
@@ -256,15 +321,11 @@ try {
     notFound: "結果が見つかりませんでした"
   }
 }
-```
 
-#### 英語 (en)
-
-```typescript
+// app/locales/en.ts
 {
   result: {
     title: "Code Review Game - {score} points!",
-    score: "{score} points",
     feedback: "Feedback",
     strengths: "Strengths",
     improvements: "Improvements",
@@ -274,21 +335,16 @@ try {
 }
 ```
 
-### i18n実装方針
-
-- 既存の`app/i18n.ts`設定を活用
-- `app/locales/ja.ts`と`app/locales/en.ts`に翻訳を追加
-- ブラウザの言語設定に応じて表示言語を自動切り替え
-- `useTranslation()`フックで翻訳文字列を取得
-
 ### OGPタグの言語
 
-**選択肢1**: 常に日本語で固定
-- シェア先が主に日本のユーザー想定の場合
+OGPタグも**保存時の言語で固定**：
 
-**選択肢2**: ユーザーの言語設定に応じて動的生成
-- グローバル展開を想定する場合
-- loaderでユーザーの言語を検出し、適切な言語のOGPタグを生成
+```typescript
+// loaderで取得したlocaleに基づいてOGPタグを生成
+const ogTitle = locale === 'ja'
+  ? `Code Review Game - ${score}点獲得！`
+  : `Code Review Game - ${score} points!`;
+```
 
 ---
 
@@ -345,18 +401,21 @@ if (!id || !UUID_REGEX.test(id)) {
 
 ### バックエンド
 
-- [ ] `app/types/result.ts`にデータ型を定義
-- [ ] `app/routes/api.save-result.tsx`を実装
-- [ ] `app/routes/result.$id.tsx`を実装
-- [ ] バリデーション関数を実装
+- [ ] `app/types/result.ts`にデータ型を定義（`locale`フィールドを含む）
+- [ ] `app/routes/api.save-result.tsx`を実装（actionのみ）
+- [ ] `app/routes/result.$id.tsx`を実装（loaderとcomponent）
+- [ ] バリデーション関数を実装（`locale`の検証を含む）
 - [ ] KV操作のエラーハンドリング
 - [ ] UUID生成ユーティリティ
 
 ### フロントエンド
 
 - [ ] 結果ページのUIコンポーネント実装
-- [ ] i18n翻訳の追加（ja/en）
-- [ ] OGPメタタグの動的生成
+- [ ] `useFetcher()`を使った結果保存呼び出し
+- [ ] 保存時のロケール取得と送信
+- [ ] 結果ページでロケール固定表示（`i18n.changeLanguage()`）
+- [ ] i18n翻訳の追加（ja/en）- 既存リソース活用
+- [ ] OGPメタタグの動的生成（ロケールに応じて）
 - [ ] 404エラーページの対応
 
 ### インフラ
@@ -376,10 +435,11 @@ if (!id || !UUID_REGEX.test(id)) {
 
 ### 統合
 
-- [ ] ShareButtonから結果保存APIを呼び出し
+- [ ] ShareButtonで`useFetcher()`を使って結果保存APIを呼び出し
+- [ ] 保存リクエストに現在のロケールを含める
 - [ ] 保存成功後に結果URLを使用
 - [ ] ツイートテキストに結果URLを含める
-- [ ] エラー時のフォールバック処理
+- [ ] エラー時のフォールバック処理（結果URLなしでシェア）
 
 ---
 

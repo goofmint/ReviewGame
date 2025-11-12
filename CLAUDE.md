@@ -366,6 +366,7 @@ interface SavedResult {
   score: number;            // 0-100
   language: string;         // プログラミング言語
   level: number;            // レベル番号
+  locale: string;           // 表示言語（"ja" | "en"）- 保存時のロケール
   feedback: string;         // LLMフィードバック
   strengths: string[];      // 良かった点
   improvements: string[];   // 改善点
@@ -595,8 +596,9 @@ preview_bucket_name = "review-game-share-images-preview"
 1. **結果保存機能**：Cloudflare KVにレビュー結果を永続保存（UUID v4ベースのユニークURL）
 2. **結果表示ページ**：`/result/{uuid}` でシンプルな結果表示（「挑戦する」リンクのみ）
 3. **OGP対応**：SNSシェア時に画像とメタ情報を表示
-4. **国際化対応**：結果ページの多言語対応（日本語・英語）
-5. **シェア機能連携**：Xシェア時に結果ページのURLを使用
+4. **言語固定表示**：結果ページは保存時の言語で固定（URLにロケールなし）
+5. **useFetcher使用**：結果保存APIは`useFetcher()`で呼び出し
+6. **シェア機能連携**：Xシェア時に結果ページのURLを使用
 
 **詳細設計**: `tasks/phase5-result-persistence.md` を参照
 
