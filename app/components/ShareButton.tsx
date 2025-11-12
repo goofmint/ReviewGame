@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
+import { useTranslation } from "react-i18next";
 import { Icon } from "@iconify/react";
 import { generateShareImage, blobToBase64 } from "~/utils/imageGenerator";
 import type { ShareResult } from "~/types/problem";
@@ -21,6 +22,8 @@ interface ShareButtonProps {
   language: string;
   /** Level number */
   level: string;
+  /** Locale (e.g., "ja", "en") */
+  locale: string;
   /** Additional CSS classes for styling */
   className?: string;
 }
@@ -40,10 +43,14 @@ export function ShareButton({
   score,
   language,
   level,
+  locale,
   className = "",
 }: ShareButtonProps) {
   // Remix fetcher for API communication
   const fetcher = useFetcher<ShareResult>();
+
+  // i18n translation hook
+  const { t } = useTranslation('share');
 
   // Client-side image generation state
   const [generationState, setGenerationState] =
@@ -79,7 +86,9 @@ export function ShareButton({
 
       // Step 1: Generate image (client-side)
       setGenerationState("generating");
-      const imageBlob = await generateShareImage(score, language, level);
+      // Get language display name from i18n
+      const languageDisplayName = t(`common:language.${language}`, language);
+      const imageBlob = await generateShareImage(score, language, level, locale, languageDisplayName);
 
       // Step 2: Convert to base64 for upload
       const base64Image = await blobToBase64(imageBlob);
@@ -93,6 +102,7 @@ export function ShareButton({
           score: score.toString(),
           language,
           level,
+          locale,
         },
         {
           method: "POST",
@@ -120,29 +130,29 @@ export function ShareButton({
   const getButtonText = (): string => {
     // Check fetcher state first (uploading)
     if (fetcher.state === "submitting" || fetcher.state === "loading") {
-      return "アップロード中...";
+      return t('button.uploading');
     }
 
     // Check for errors
     if (fetcher.data && "error" in fetcher.data) {
-      return "エラーが発生しました";
+      return t('button.error');
     }
 
     if (generationState === "error") {
-      return "エラーが発生しました";
+      return t('button.error');
     }
 
     // Check generation state
     if (generationState === "generating") {
-      return "画像生成中...";
+      return t('button.generating');
     }
 
     // Check for success
     if (fetcher.data && "tweetUrl" in fetcher.data) {
-      return "シェア成功！";
+      return t('button.success');
     }
 
-    return "Xでシェア";
+    return t('button.share');
   };
 
   /**
@@ -236,7 +246,7 @@ export function ShareButton({
           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
           dark:focus:ring-offset-gray-900
         `}
-        aria-label="Xでシェア"
+        aria-label={t('button.share')}
         aria-busy={isDisabled}
       >
         {/* Icon with conditional animation */}

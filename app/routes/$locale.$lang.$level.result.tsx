@@ -6,13 +6,14 @@
  * Records progress to localStorage for level unlocking
  */
 
-import { useEffect, useRef } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router";
-import type { Route } from "./+types/$lang.$level.result";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useParams, type LoaderFunctionArgs } from "react-router";
+import { useTranslation } from "react-i18next";
 import { recordAttempt } from "~/utils/progress";
-import { problems } from "~/data/problems";
+import { problems, availableLocales } from "~/data/problems";
 import { PASSING_SCORE } from "~/utils/constants";
 import { ShareButton } from "~/components/ShareButton";
+import { initI18n } from "~/utils/i18n.client";
 import {
   uploadImageToR2,
   generateStorageKey,
@@ -35,10 +36,25 @@ interface ResultState {
   improvements: string[] | undefined;
 }
 
-export function meta({ params }: Route.MetaArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
+  const { locale, lang, level } = params;
+
+  // Validate locale, language and level parameters
+  if (!locale || !availableLocales.includes(locale)) {
+    throw new Response("Invalid locale", { status: 404 });
+  }
+
+  if (!lang || !level || !problems[locale]?.[lang]?.[level]) {
+    throw new Response("Invalid language or level", { status: 404 });
+  }
+
+  return { locale, lang, level };
+}
+
+export function meta({ params }: { params: { locale: string; lang: string; level: string } }) {
   return [
-    { title: `結果 - ${params.lang} レベル${params.level}` },
-    { name: "description", content: "レビューの評価結果" },
+    { title: `Result - ${params.lang} Level ${params.level}` },
+    { name: "description", content: "Code review evaluation result" },
   ];
 }
 
@@ -59,6 +75,7 @@ interface ShareImageRequest {
   score: number | string;
   language: string;
   level: string;
+  locale: string;
 }
 
 /**
@@ -149,7 +166,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     const imageUrl = getPublicUrl(storageKey, publicUrl);
 
     // Generate tweet text and X intent URL
-    const tweetText = generateTweetText(score, body.language, body.level);
+    const locale = body.locale || "en";
+    const tweetText = generateTweetText(score, body.language, body.level, locale);
     const tweetUrl = generateXIntentUrl(tweetText, imageUrl);
 
     // Return result
@@ -178,11 +196,22 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function ResultPage() {
-  const { lang, level } = useParams();
+  const { locale, lang, level } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { t, ready } = useTranslation(['common', 'game', 'feedback']);
+  const [i18nReady, setI18nReady] = useState(false);
   const state = location.state as ResultState | null;
   const lastRecordedKey = useRef<string>("");
+
+  // Initialize i18n
+  useEffect(() => {
+    if (locale) {
+      initI18n(locale).then(() => {
+        setI18nReady(true);
+      });
+    }
+  }, [locale]);
 
   // Record progress when page loads
   useEffect(() => {
@@ -198,11 +227,17 @@ export default function ResultPage() {
   // If no state, redirect back to problem page
   useEffect(() => {
     if (!state) {
-      navigate(`/${lang}/${level}`, { replace: true });
+      navigate(`/${locale}/${lang}/${level}`, { replace: true });
     }
-  }, [state, lang, level, navigate]);
+  }, [state, locale, lang, level, navigate]);
 
-  if (!state || !lang || !level) {
+  if (!i18nReady || !ready) {
+    return <div className="min-h-screen flex items-center justify-center">
+      <div className="text-xl">Loading...</div>
+    </div>;
+  }
+
+  if (!state || !lang || !level || !locale) {
     return null;
   }
 
@@ -210,7 +245,7 @@ export default function ResultPage() {
   const parsedLevel = parseInt(level, 10);
   let hasNextLevel = false;
   let nextLevel = "";
-  const langProblems = lang in problems ? problems[lang as keyof typeof problems] : null;
+  const langProblems = locale && lang && problems[locale]?.[lang] ? problems[locale][lang] : null;
 
   if (Number.isInteger(parsedLevel) && langProblems) {
     nextLevel = String(parsedLevel + 1);
@@ -231,15 +266,15 @@ export default function ResultPage() {
               }`}
             >
               <div className="text-white text-6xl font-bold mb-2">
-                {state.score}点
+                {t('feedback:score', { score: state.score })}
               </div>
               <div className="text-white text-xl">
-                {state.passed ? "🎉 合格！" : "もう少し！"}
+                {state.passed ? t('feedback:passed') : t('feedback:almostThere')}
               </div>
             </div>
             {state.passed && hasNextLevel && (
               <p className="mt-4 text-gray-700 dark:text-gray-300 text-lg">
-                次のレベルがアンロックされました！
+                {t('feedback:nextLevelUnlocked')}
               </p>
             )}
           </div>
@@ -248,7 +283,7 @@ export default function ResultPage() {
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 mb-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
               <span className="text-3xl mr-3">💬</span>
-              AIフィードバック
+              {t('feedback:aiFeedback')}
             </h2>
             <p className="text-gray-700 dark:text-gray-300 text-lg leading-relaxed">
               {state.feedback}
@@ -259,7 +294,7 @@ export default function ResultPage() {
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 mb-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
               <span className="text-3xl mr-3">✍️</span>
-              あなたのレビュー
+              {t('feedback:yourReview')}
             </h2>
             <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
               <pre className="whitespace-pre-wrap text-gray-700 dark:text-gray-300 font-sans">
@@ -273,7 +308,7 @@ export default function ResultPage() {
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 mb-8">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                 <span className="text-3xl mr-3">👍</span>
-                良かった点
+                {t('feedback:strengths')}
               </h2>
               <ul className="space-y-3">
                 {(state.strengths || []).map((strength, index) => (
@@ -294,7 +329,7 @@ export default function ResultPage() {
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 mb-8">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
                 <span className="text-3xl mr-3">💡</span>
-                改善点
+                {t('feedback:improvements')}
               </h2>
               <ul className="space-y-3">
                 {(state.improvements || []).map((improvement, index) => (
@@ -313,12 +348,13 @@ export default function ResultPage() {
           {/* Share Section */}
           <div className="text-center mb-8">
             <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-              結果をシェアしよう！
+              {t('feedback:shareTitle')}
             </h3>
             <ShareButton
               score={state.score}
               language={lang}
               level={level}
+              locale={locale}
               className="inline-block"
             />
           </div>
@@ -328,29 +364,29 @@ export default function ResultPage() {
             {/* Show "Next Level" button if passed and next level exists */}
             {state.passed && hasNextLevel && (
               <Link
-                to={`/${lang}/${nextLevel}`}
+                to={`/${locale}/${lang}/${nextLevel}`}
                 className="px-8 py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-center font-semibold"
               >
-                次のレベルへ →
+                {t('feedback:nextLevel')}
               </Link>
             )}
             <Link
-              to={`/${lang}/${level}`}
+              to={`/${locale}/${lang}/${level}`}
               className="px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-center font-semibold"
             >
-              もう一度挑戦
+              {t('feedback:retry')}
             </Link>
             <Link
-              to={`/${lang}`}
+              to={`/${locale}/${lang}`}
               className="px-8 py-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-center font-semibold"
             >
-              レベル選択に戻る
+              {t('feedback:backToLevels')}
             </Link>
             <Link
-              to="/"
+              to={`/${locale}`}
               className="px-8 py-4 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-center font-semibold"
             >
-              言語選択に戻る
+              {t('feedback:backToLanguages')}
             </Link>
           </div>
 
@@ -359,11 +395,10 @@ export default function ResultPage() {
             <div className="mt-12 p-6 bg-blue-50 dark:bg-blue-900/20 rounded-xl border-2 border-blue-200 dark:border-blue-800">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center">
                 <span className="mr-2">ℹ️</span>
-                次のレベルに進むには
+                {t('feedback:passingInfoTitle')}
               </h3>
               <p className="text-gray-700 dark:text-gray-300">
-                {PASSING_SCORE}点以上を獲得すると、次のレベルがアンロックされます。
-                もう一度挑戦してみましょう！
+                {t('feedback:passingInfoMessage', { score: PASSING_SCORE })}
               </p>
             </div>
           )}

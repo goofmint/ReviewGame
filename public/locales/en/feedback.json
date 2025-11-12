@@ -1,13 +1,24 @@
 {
   "result": "Result",
   "score": "{{score}} pts",
-  "passed": "Passed!",
+  "passed": "🎉 Passed!",
+  "almostThere": "Almost there!",
   "failed": "Not Passed",
   "passMessage": "You scored 70 or above! Next level unlocked!",
   "failMessage": "You need 70 or above to unlock the next level. Try again!",
+  "nextLevelUnlocked": "Next level unlocked!",
   "overallFeedback": "Overall Feedback",
+  "aiFeedback": "AI Feedback",
+  "yourReview": "Your Review",
   "strengths": "Strengths",
   "improvements": "Areas for Improvement",
   "noStrengths": "None",
-  "noImprovements": "None"
+  "noImprovements": "None",
+  "shareTitle": "Share your result!",
+  "nextLevel": "Next Level →",
+  "retry": "Try Again",
+  "backToLevels": "Back to Level Selection",
+  "backToLanguages": "Back to Language Selection",
+  "passingInfoTitle": "To progress to the next level",
+  "passingInfoMessage": "Score {{score}} or above to unlock the next level. Try again!"
 }

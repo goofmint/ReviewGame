@@ -8,7 +8,13 @@ import { useEffect, useState } from "react";
 import type { MetaFunction } from "react-router";
 import { generateShareImage } from "~/utils/imageGenerator";
 import { availableLanguages } from "~/data/problems";
-import { LANGUAGE_DISPLAY_NAMES } from "~/utils/constants";
+
+// Simple language display names for the preview tool
+const LANGUAGE_DISPLAY_NAMES: Record<string, string> = {
+  javascript: "JavaScript",
+  python: "Python",
+  flutter: "Flutter",
+};
 
 export const meta: MetaFunction = () => {
   return [
@@ -25,6 +31,7 @@ export default function SharePreview() {
   const [score, setScore] = useState<number>(75);
   const [language, setLanguage] = useState<string>(availableLanguages[0]);
   const [level, setLevel] = useState<string>("1");
+  const [locale, setLocale] = useState<string>("en");
 
   // Preview state
   const [previewUrl, setPreviewUrl] = useState<string>("");
@@ -47,7 +54,8 @@ export default function SharePreview() {
 
     try {
       // Generate image using the same function as ShareButton
-      const imageBlob = await generateShareImage(score, language, level);
+      const languageDisplayName = LANGUAGE_DISPLAY_NAMES[language] || language;
+      const imageBlob = await generateShareImage(score, language, level, locale, languageDisplayName);
 
       // Create object URL for preview
       const url = URL.createObjectURL(imageBlob);
@@ -154,6 +162,25 @@ export default function SharePreview() {
                 onChange={(e) => setLevel(e.target.value)}
                 className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+
+            {/* Locale Select */}
+            <div>
+              <label
+                htmlFor="locale"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                Locale
+              </label>
+              <select
+                id="locale"
+                value={locale}
+                onChange={(e) => setLocale(e.target.value)}
+                className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ja">日本語 (ja)</option>
+                <option value="en">English (en)</option>
+              </select>
             </div>
 
             {/* Generate Button */}
