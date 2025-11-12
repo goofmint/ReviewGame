@@ -1,0 +1,10 @@
+{
+  "title": "Code Review Game - {{score}}点獲得！",
+  "feedback": "フィードバック",
+  "strengths": "良かった点",
+  "improvements": "改善点",
+  "challenge": "挑戦する",
+  "notFound": "結果が見つかりませんでした",
+  "scoreLabel": "{{score}}点",
+  "languageLevel": "{{language}} - Level {{level}}"
+}

@@ -131,8 +131,10 @@ ReviewGame/
 │   │   ├── _index.tsx           # 言語選択画面
 │   │   ├── $lang._index.tsx     # レベル選択画面
 │   │   ├── $lang.$level.tsx     # 問題表示・レビュー画面
+│   │   ├── result.$id.tsx       # 保存された結果表示ページ (Phase 5)
 │   │   ├── api.evaluate.tsx     # レビュー評価API
-│   │   └── api.share-image.tsx  # シェア画像生成API
+│   │   ├── api.share-image.tsx  # シェア画像生成API
+│   │   └── api.save-result.tsx  # 結果保存API (Phase 5)
 │   ├── components/
 │   │   ├── LanguageSelector.tsx
 │   │   ├── LevelSelector.tsx
@@ -168,6 +170,8 @@ ReviewGame/
 │       └── level3.md
 ├── scripts/
 │   └── build-problems.ts       # ビルド時にMarkdown→TSに変換
+├── tasks/                      # 詳細設計ドキュメント
+│   └── phase5-result-persistence.md  # Phase 5詳細設計
 ├── public/
 │   └── images/
 │       └── coderabbit-icon.png  # CodeRabbitアイコン
@@ -354,6 +358,26 @@ interface ShareResult {
 }
 ```
 
+### 5.6 SavedResult型（Phase 5）
+
+```typescript
+interface SavedResult {
+  id: string;               // UUID v4（URLパスとKVキーに直接使用）
+  score: number;            // 0-100
+  language: string;         // プログラミング言語
+  level: number;            // レベル番号
+  locale: string;           // 表示言語（"ja" | "en"）- 保存時のロケール
+  feedback: string;         // LLMフィードバック
+  strengths: string[];      // 良かった点
+  improvements: string[];   // 改善点
+  imageUrl: string;         // OG画像のR2 URL
+  timestamp: number;        // UNIX timestamp（ミリ秒）
+  createdAt: string;        // ISO 8601形式の日時
+}
+```
+
+**詳細**: `tasks/phase5-result-persistence.md` の「データ構造」セクション参照
+
 ## 6. 主要機能の実装フロー
 
 ### 6.1 問題読み込みフロー
@@ -510,6 +534,12 @@ bucket = "./public"
 
 # 問題データはビルド時にバンドルされるためKV不要
 
+# Phase 5: 結果保存用のKVバインディング
+[[kv_namespaces]]
+binding = "RESULTS_KV"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
 [[r2_buckets]]
 binding = "SHARE_IMAGES"
 bucket_name = "review-game-share-images"
@@ -562,6 +592,16 @@ preview_bucket_name = "review-game-share-images-preview"
 3. ランキング機能（ローカル）
 4. シェア機能の拡張（他のSNS対応）
 
+### Phase 5: レビュー結果の永続化とシェア機能の強化
+1. **結果保存機能**：Cloudflare KVにレビュー結果を永続保存（UUID v4ベースのユニークURL）
+2. **結果表示ページ**：`/result/{uuid}` でシンプルな結果表示（「挑戦する」リンクのみ）
+3. **OGP対応**：SNSシェア時に画像とメタ情報を表示
+4. **言語固定表示**：結果ページは保存時の言語で固定（URLにロケールなし）
+5. **useFetcher使用**：結果保存APIは`useFetcher()`で呼び出し
+6. **シェア機能連携**：Xシェア時に結果ページのURLを使用
+
+**詳細設計**: `tasks/phase5-result-persistence.md` を参照
+
 ## 11. セキュリティ考慮事項
 
 - LLM APIキーはCloudflare Workersのシークレットで管理
@@ -573,6 +613,16 @@ preview_bucket_name = "review-game-share-images-preview"
   - ファイル名のサニタイゼーション
   - 画像サイズの制限（最大5MB程度）
   - 不正なパラメータのバリデーション
+- **Phase 5: 結果保存**：
+  - 個人情報は一切保存しない
+  - UUID v4による推測不可能なURL
+  - レート制限（5リクエスト/分、KVベース）
+  - XSSサニタイゼーション（`sanitize-html`使用）
+  - 入力値のバリデーション（型・長さ・形式）
+  - データサイズ制限（最大32KB）
+  - CSRF対策は不要（認証なし、公開データ）
+
+**詳細**: `tasks/phase5-result-persistence.md` の「セキュリティ」セクション参照
 
 ## 12. パフォーマンス最適化
 

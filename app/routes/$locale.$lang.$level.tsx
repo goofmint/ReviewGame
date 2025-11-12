@@ -24,9 +24,9 @@ import { initI18n } from "~/utils/i18n.client";
 import type { EvaluationResult } from "~/types/problem";
 import { evaluate } from "~/utils/evaluate";
 import type { EvaluationRequestBody } from "~/types/evaluate";
-import { i18n } from "~/i18n.server";
+import { t } from "~/utils/translations.server";
 
-export async function loader({ params, request }: LoaderFunctionArgs) {
+export async function loader({ params }: LoaderFunctionArgs) {
   const { locale, lang, level } = params;
 
   // Validate locale, language and level parameters
@@ -38,18 +38,15 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     throw new Response("Invalid language or level", { status: 404 });
   }
 
-  // Load translations for meta tags
-  const t = await i18n.getFixedT(request, 'game', locale);
-
   // Get language display name
-  const tCommon = await i18n.getFixedT(request, 'common', locale);
-  const languageDisplayName = tCommon(`language.${lang}`, lang);
+  const languageDisplayName = t(locale, 'common', `language.${lang}`);
 
-  const metaTitle = t('meta.titleTemplate', {
+  // Load translations for meta tags
+  const metaTitle = t(locale, 'game', 'meta.titleTemplate', {
     language: languageDisplayName,
     level,
   });
-  const metaDescription = t('meta.description');
+  const metaDescription = t(locale, 'game', 'meta.description');
 
   return {
     locale,
