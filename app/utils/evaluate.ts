@@ -81,6 +81,7 @@ export async function evaluate(body: EvaluationRequestBody, env: { GEMINI_API_KE
       code: problem.code,
       userReview: body.review,
       evaluationCriteria: problem.evaluationCriteria,
+      locale: body.locale, // Pass locale to LLM for localized evaluation
     };
     // Try to use real LLM evaluation if API key is available
     return evaluateReview(evaluationRequest, env);
