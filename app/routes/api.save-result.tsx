@@ -7,8 +7,6 @@
  * Implements rate limiting, validation, and sanitization.
  */
 
-import { v4 as uuidv4 } from "uuid";
-
 import type {
   SavedResult,
   SaveResultRequest,
@@ -98,8 +96,8 @@ export async function action({ request, context }: ActionArgs) {
     // 3. Sanitize text fields
     const sanitizedData = sanitizeResultRequest(body);
 
-    // 4. Generate UUID v4
-    const resultId = uuidv4();
+    // 4. Generate UUID v4 using Web Crypto API
+    const resultId = crypto.randomUUID();
 
     // 5. Create SavedResult object
     const now = Date.now();
