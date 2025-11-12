@@ -7,14 +7,15 @@
     "submit": "Submit",
     "retry": "Try Again",
     "next": "Next Level",
-    "share": "Share on X",
+    "share": "Share",
     "backToLanguages": "Back to Languages",
     "backToLevels": "Back to Levels"
   },
   "language": {
     "javascript": "JavaScript",
     "python": "Python",
-    "flutter": "Flutter"
+    "flutter": "Flutter",
+    "codeReviewGame": "Code Review Game"
   },
   "languageDescription": {
     "javascript": "Foundation of web development",

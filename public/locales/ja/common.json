@@ -7,14 +7,15 @@
     "submit": "送信",
     "retry": "もう一度挑戦",
     "next": "次のレベルへ",
-    "share": "Xでシェア",
+    "share": "シェア",
     "backToLanguages": "言語選択に戻る",
     "backToLevels": "レベル選択に戻る"
   },
   "language": {
     "javascript": "JavaScript",
     "python": "Python",
-    "flutter": "Flutter"
+    "flutter": "Flutter",
+    "codeReviewGame": "コードレビューゲーム"
   },
   "languageDescription": {
     "javascript": "Web開発の基礎言語",

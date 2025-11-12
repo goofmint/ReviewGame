@@ -8,10 +8,10 @@
     "template": "I scored {{score}} points on #CodeRabbit Code Review Game!\nLanguage: {{language}} | Level: {{level}}\n\n{{gameUrl}}"
   },
   "button": {
-    "share": "Share on X",
+    "share": "Share",
     "generating": "Generating image...",
-    "uploading": "Uploading...",
-    "success": "Shared successfully!",
-    "error": "An error occurred"
+    "success": "Shared!",
+    "error": "An error occurred",
+    "downloadFallback": "Web Share API not supported. Image downloaded."
   }
 }

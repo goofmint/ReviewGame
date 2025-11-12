@@ -8,10 +8,10 @@
     "template": "#CodeRabbit コードレビューゲームで{{score}}点を獲得しました！\n言語: {{language}} | レベル: {{level}}\n\n{{gameUrl}}"
   },
   "button": {
-    "share": "Xでシェア",
+    "share": "シェア",
     "generating": "画像生成中...",
-    "uploading": "アップロード中...",
-    "success": "シェア成功！",
-    "error": "エラーが発生しました"
+    "success": "シェアしました！",
+    "error": "エラーが発生しました",
+    "downloadFallback": "Web Share APIが利用できません。画像をダウンロードしました。"
   }
 }

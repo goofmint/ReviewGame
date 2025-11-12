@@ -1,16 +1,14 @@
 /**
  * ShareButton Component
- * Provides X (Twitter) sharing functionality with image generation
- * Generates share image, uploads to R2, and opens X share dialog
- * Uses Remix useFetcher to call the current route's action
+ * Provides social media sharing functionality using Web Share API
+ * Generates share image and shares via native share dialog
+ * Falls back to X Web Intent if Web Share API is not available
  */
 
-import { useEffect, useState } from "react";
-import { useFetcher } from "react-router";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "@iconify/react";
-import { generateShareImage, blobToBase64 } from "~/utils/imageGenerator";
-import type { ShareResult } from "~/types/problem";
+import { generateShareImage, blobToFile } from "~/utils/imageGenerator";
 
 /**
  * Props for ShareButton component
@@ -29,15 +27,15 @@ interface ShareButtonProps {
 }
 
 /**
- * Client-side states for image generation
+ * Client-side states for sharing
  */
-type GenerationState = "idle" | "generating" | "ready" | "error";
+type ShareState = "idle" | "generating" | "success" | "error";
 
 /**
  * ShareButton component that handles the entire share flow:
  * 1. Generate OG image using Canvas API (client-side)
- * 2. Upload image to R2 via useFetcher (calls current route's action)
- * 3. Open X (Twitter) share dialog with pre-filled content
+ * 2. Share via Web Share API with image file
+ * 3. Falls back to downloading image if Web Share API is not available
  */
 export function ShareButton({
   score,
@@ -46,80 +44,89 @@ export function ShareButton({
   locale,
   className = "",
 }: ShareButtonProps) {
-  // Remix fetcher for API communication
-  const fetcher = useFetcher<ShareResult>();
-
   // i18n translation hook
-  const { t } = useTranslation('share');
+  const { t } = useTranslation(['share', 'common']);
 
-  // Client-side image generation state
-  const [generationState, setGenerationState] =
-    useState<GenerationState>("idle");
-  const [generationError, setGenerationError] = useState<string>("");
-  const [imageData, setImageData] = useState<string>("");
-
-  /**
-   * Handle successful share response
-   * Opens X share dialog when data is received
-   */
-  useEffect(() => {
-    if (fetcher.data && "tweetUrl" in fetcher.data) {
-      // Open X share dialog
-      window.open(fetcher.data.tweetUrl, "_blank", "noopener,noreferrer");
-
-      // Reset generation state after success
-      setTimeout(() => {
-        setGenerationState("idle");
-        setImageData("");
-      }, 2000);
-    }
-  }, [fetcher.data]);
+  // Client-side sharing state
+  const [shareState, setShareState] = useState<ShareState>("idle");
+  const [shareError, setShareError] = useState<string>("");
 
   /**
    * Handles the share button click
-   * Orchestrates image generation and upload
+   * Generates image and shares via Web Share API
    */
   const handleShare = async () => {
     try {
       // Reset error state
-      setGenerationError("");
+      setShareError("");
+      setShareState("generating");
 
       // Step 1: Generate image (client-side)
-      setGenerationState("generating");
-      // Get language display name from i18n
       const languageDisplayName = t(`common:language.${language}`, language);
       const imageBlob = await generateShareImage(score, language, level, locale, languageDisplayName);
 
-      // Step 2: Convert to base64 for upload
-      const base64Image = await blobToBase64(imageBlob);
-      setImageData(base64Image);
-      setGenerationState("ready");
+      // Step 2: Create share text
+      const shareText = locale === 'ja'
+        ? `#CodeRabbit コードレビューゲームで${score}点を獲得しました！\n言語: ${languageDisplayName} | レベル: ${level}`
+        : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName} | Level: ${level}`;
 
-      // Step 3: Upload to R2 via useFetcher (calls the current route's action)
-      fetcher.submit(
-        {
-          imageData: base64Image,
-          score: score.toString(),
-          language,
-          level,
-          locale,
-        },
-        {
-          method: "POST",
-          encType: "application/json",
-        }
-      );
+      // Step 3: Create file from blob
+      const fileName = `code-review-game-${language}-level${level}-${score}pts.png`;
+      const imageFile = blobToFile(imageBlob, fileName);
+
+      // Step 4: Check if Web Share API is available and supports files
+      if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+        // Use Web Share API
+        await navigator.share({
+          title: t('common:language.codeReviewGame', 'Code Review Game'),
+          text: shareText,
+          files: [imageFile],
+        });
+
+        setShareState("success");
+
+        // Reset state after success
+        setTimeout(() => {
+          setShareState("idle");
+        }, 3000);
+      } else {
+        // Fallback: Download the image
+        const url = URL.createObjectURL(imageBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setShareState("success");
+        setShareError(t('share:button.downloadFallback', 'Web Share not supported. Image downloaded.'));
+
+        setTimeout(() => {
+          setShareState("idle");
+          setShareError("");
+        }, 5000);
+      }
     } catch (error) {
       console.error("Share error:", error);
-      setGenerationState("error");
-      setGenerationError(
-        error instanceof Error ? error.message : "Failed to generate image"
+
+      // Check if user cancelled the share
+      if (error instanceof Error && error.name === 'AbortError') {
+        // User cancelled, just reset to idle
+        setShareState("idle");
+        return;
+      }
+
+      setShareState("error");
+      setShareError(
+        error instanceof Error ? error.message : t('share:button.error', 'Failed to share')
       );
 
       // Reset error state after a delay
       setTimeout(() => {
-        setGenerationState("idle");
-        setGenerationError("");
+        setShareState("idle");
+        setShareError("");
       }, 5000);
     }
   };
@@ -128,109 +135,54 @@ export function ShareButton({
    * Gets the button text based on current state
    */
   const getButtonText = (): string => {
-    // Check fetcher state first (uploading)
-    if (fetcher.state === "submitting" || fetcher.state === "loading") {
-      return t('button.uploading');
+    switch (shareState) {
+      case "generating":
+        return t('share:button.generating', 'Generating...');
+      case "success":
+        return t('share:button.success', 'Shared!');
+      case "error":
+        return t('share:button.error', 'Error');
+      default:
+        return t('share:button.share', 'Share');
     }
-
-    // Check for errors
-    if (fetcher.data && "error" in fetcher.data) {
-      return t('button.error');
-    }
-
-    if (generationState === "error") {
-      return t('button.error');
-    }
-
-    // Check generation state
-    if (generationState === "generating") {
-      return t('button.generating');
-    }
-
-    // Check for success
-    if (fetcher.data && "tweetUrl" in fetcher.data) {
-      return t('button.success');
-    }
-
-    return t('button.share');
   };
 
   /**
    * Gets the button icon based on current state
    */
   const getButtonIcon = (): string => {
-    // Check for loading states
-    if (
-      generationState === "generating" ||
-      fetcher.state === "submitting" ||
-      fetcher.state === "loading"
-    ) {
-      return "mdi:loading"; // Rotating spinner icon
+    switch (shareState) {
+      case "generating":
+        return "mdi:loading"; // Rotating spinner icon
+      case "success":
+        return "mdi:check-circle";
+      case "error":
+        return "mdi:alert-circle";
+      default:
+        return "mdi:share-variant"; // Share icon
     }
-
-    // Check for errors
-    if (
-      generationState === "error" ||
-      (fetcher.data && "error" in fetcher.data)
-    ) {
-      return "mdi:alert-circle";
-    }
-
-    // Check for success
-    if (fetcher.data && "tweetUrl" in fetcher.data) {
-      return "mdi:check-circle";
-    }
-
-    return "mdi:twitter"; // X/Twitter logo
   };
 
   /**
    * Determines if the button should be disabled
    */
-  const isDisabled =
-    generationState === "generating" ||
-    fetcher.state === "submitting" ||
-    fetcher.state === "loading";
+  const isDisabled = shareState === "generating";
 
   /**
    * Gets button color classes based on state
    */
   const getButtonColorClasses = (): string => {
-    // Success state
-    if (fetcher.data && "tweetUrl" in fetcher.data) {
-      return "bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600";
+    switch (shareState) {
+      case "success":
+        return "bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600";
+      case "error":
+        return "bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600";
+      default:
+        return "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700";
     }
-
-    // Error state
-    if (
-      generationState === "error" ||
-      (fetcher.data && "error" in fetcher.data)
-    ) {
-      return "bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600";
-    }
-
-    // Default: X brand blue color
-    return "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700";
   };
 
-  /**
-   * Gets the current error message
-   */
-  const getErrorMessage = (): string => {
-    if (generationError) {
-      return generationError;
-    }
-
-    if (fetcher.data && "error" in fetcher.data) {
-      return fetcher.data.error as string;
-    }
-
-    return "";
-  };
-
-  const errorMessage = getErrorMessage();
-  const hasError =
-    generationState === "error" || (fetcher.data && "error" in fetcher.data);
+  const hasError = shareState === "error" && shareError !== "";
 
   return (
     <div className={className}>
@@ -254,23 +206,17 @@ export function ShareButton({
           icon={getButtonIcon()}
           width={24}
           height={24}
-          className={
-            generationState === "generating" ||
-            fetcher.state === "submitting" ||
-            fetcher.state === "loading"
-              ? "animate-spin"
-              : ""
-          }
+          className={shareState === "generating" ? "animate-spin" : ""}
         />
 
         {/* Button text */}
         <span>{getButtonText()}</span>
       </button>
 
-      {/* Error message display */}
-      {hasError && errorMessage && (
+      {/* Error/Info message display */}
+      {hasError && shareError && (
         <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">
-          {errorMessage}
+          {shareError}
         </p>
       )}
     </div>
