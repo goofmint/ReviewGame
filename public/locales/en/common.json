@@ -1,0 +1,23 @@
+{
+  "nav": {
+    "home": "Home",
+    "back": "Back"
+  },
+  "button": {
+    "submit": "Submit",
+    "retry": "Try Again",
+    "next": "Next Level",
+    "share": "Share on X",
+    "backToLanguages": "Back to Languages",
+    "backToLevels": "Back to Levels"
+  },
+  "language": {
+    "javascript": "JavaScript",
+    "python": "Python",
+    "flutter": "Flutter"
+  },
+  "locale": {
+    "ja": "日本語",
+    "en": "English"
+  }
+}

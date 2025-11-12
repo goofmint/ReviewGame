@@ -1,0 +1,13 @@
+{
+  "result": "Result",
+  "score": "{{score}} pts",
+  "passed": "Passed!",
+  "failed": "Not Passed",
+  "passMessage": "You scored 70 or above! Next level unlocked!",
+  "failMessage": "You need 70 or above to unlock the next level. Try again!",
+  "overallFeedback": "Overall Feedback",
+  "strengths": "Strengths",
+  "improvements": "Areas for Improvement",
+  "noStrengths": "None",
+  "noImprovements": "None"
+}

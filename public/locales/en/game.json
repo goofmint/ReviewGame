@@ -1,0 +1,18 @@
+{
+  "title": "Code Review Game",
+  "selectLanguage": "Select Programming Language",
+  "selectLevel": "Select Level",
+  "level": "Level {{level}}",
+  "difficulty": "Difficulty",
+  "locked": "Locked",
+  "unlocked": "Unlocked",
+  "bestScore": "Best Score: {{score}} pts",
+  "attempts": "{{count}} attempts",
+  "requirements": "Requirements",
+  "code": "Code",
+  "yourReview": "Your Review",
+  "reviewPlaceholder": "Write your code review here...\n\nHint: Click on line numbers or requirements to automatically insert templates.",
+  "submitting": "Evaluating...",
+  "lineReference": "Line {{line}}: ",
+  "requirementReference": "Regarding requirement \"{{requirement}}\": "
+}

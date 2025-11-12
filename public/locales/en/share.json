@@ -1,0 +1,13 @@
+{
+  "image": {
+    "title": "Code Review Game",
+    "scoreLabel": "{{score}} pts",
+    "subtitle": "{{language}} - Level {{level}}"
+  },
+  "tweet": {
+    "template": "I scored {{score}} points on #CodeRabbit Code Review Game!\nLanguage: {{language}} | Level: {{level}}\n\n{{gameUrl}}"
+  },
+  "shareButton": "Share on X",
+  "generating": "Generating image...",
+  "error": "Failed to generate share image"
+}

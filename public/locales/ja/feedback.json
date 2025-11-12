@@ -1,0 +1,13 @@
+{
+  "result": "結果",
+  "score": "{{score}}点",
+  "passed": "合格！",
+  "failed": "不合格",
+  "passMessage": "70点以上で次のレベルがアンロックされました！",
+  "failMessage": "70点以上で次のレベルがアンロックされます。もう一度挑戦しましょう！",
+  "overallFeedback": "総評",
+  "strengths": "良かった点",
+  "improvements": "改善点",
+  "noStrengths": "特になし",
+  "noImprovements": "特になし"
+}
