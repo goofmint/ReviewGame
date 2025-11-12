@@ -146,6 +146,7 @@ export function ShareButton({
         // Skip generation, go directly to save
         setUploadedImageUrl(providedImageUrl);
         setShareState("saving");
+
         saveFetcher.submit(
           {
             score,
