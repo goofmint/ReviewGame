@@ -10,7 +10,6 @@ import { Link, useParams, type LoaderFunctionArgs } from "react-router";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { availableLanguages, availableLocales } from "~/data/problems";
-import { LANGUAGE_DISPLAY_NAMES, LANGUAGE_DESCRIPTIONS, PASSING_SCORE } from "~/utils/constants";
 import { LanguageIcon } from "~/components/LanguageIcon";
 import { initI18n } from "~/utils/i18n.client";
 
@@ -87,8 +86,8 @@ export default function LanguageSelection() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {availableLanguages.map((lang) => {
                 const langStr = lang as string;
-                const displayName = LANGUAGE_DISPLAY_NAMES[langStr] || langStr;
-                const description = LANGUAGE_DESCRIPTIONS[langStr] || "";
+                const displayName = t(`common:language.${langStr}`, langStr);
+                const description = t(`common:languageDescription.${langStr}`, '');
 
                 return (
                   <Link

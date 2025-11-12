@@ -16,6 +16,11 @@
     "python": "Python",
     "flutter": "Flutter"
   },
+  "languageDescription": {
+    "javascript": "Web開発の基礎言語",
+    "python": "データ分析・AI開発",
+    "flutter": "モバイルアプリ開発"
+  },
   "locale": {
     "ja": "日本語",
     "en": "English"
