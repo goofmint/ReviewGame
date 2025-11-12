@@ -20,6 +20,10 @@ import type { EvaluationRequestBody } from "~/types/evaluate";
  * @returns An error message if invalid, or null if valid
  */
 function validateRequest(body: EvaluationRequestBody): string | null {
+  if (!body.locale || typeof body.locale !== "string") {
+    return "Invalid or missing locale parameter";
+  }
+
   if (!body.language || typeof body.language !== "string") {
     return "Invalid or missing language parameter";
   }
@@ -36,12 +40,17 @@ function validateRequest(body: EvaluationRequestBody): string | null {
     return "Review is too short. Please provide more detailed feedback.";
   }
 
-  // Check if the problem exists
-  if (!(body.language in problems)) {
+  // Check if the problem exists with locale support
+  if (!(body.locale in problems)) {
+    return "Unknown locale";
+  }
+
+  const localeProblems = problems[body.locale as keyof typeof problems];
+  if (!(body.language in localeProblems)) {
     return "Unknown language";
   }
 
-  const langProblems = problems[body.language as keyof typeof problems];
+  const langProblems = localeProblems[body.language as keyof typeof localeProblems];
   if (!(body.level in langProblems)) {
     return "Unknown level for this language";
   }
@@ -61,8 +70,9 @@ export async function evaluate(body: EvaluationRequestBody, env: { GEMINI_API_KE
     const validationError = validateRequest(body);
     if (validationError) throw new Error(validationError);
 
-    // Get the problem data
-    const langProblems = problems[body.language as keyof typeof problems];
+    // Get the problem data with locale support
+    const localeProblems = problems[body.locale as keyof typeof problems];
+    const langProblems = localeProblems[body.language as keyof typeof localeProblems];
     const problem = langProblems[body.level as keyof typeof langProblems];
 
     // Prepare evaluation request
