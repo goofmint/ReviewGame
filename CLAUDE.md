@@ -360,7 +360,7 @@ interface ShareResult {
 
 ```typescript
 interface SavedResult {
-  id: string;               // UUID v4
+  id: string;               // UUID v4（URLパスとKVキーに直接使用）
   score: number;            // 0-100
   language: string;         // プログラミング言語
   level: number;            // レベル番号
@@ -510,9 +510,9 @@ interface SaveResultResponse {
    - タイムスタンプを記録
    - SavedResult型のデータを作成
    - Cloudflare KVに保存:
-     - キー: `result:${uuid}`
+     - キー: UUIDをそのまま使用（`${uuid}`）
      - 値: JSON.stringify(savedResult)
-     - 有効期限: 90日間（オプション）
+     - 有効期限: なし（永続保存）
 6. レスポンスを返却:
    ```typescript
    {
@@ -523,9 +523,9 @@ interface SaveResultResponse {
 7. ツイートテキストに結果URLを含めてXシェア
 
 **結果表示フロー**:
-1. ユーザーが `/result/{id}` にアクセス
+1. ユーザーが `/result/{id}` にアクセス（idはUUID）
 2. サーバー側（loader）で処理:
-   - KVから `result:${id}` を取得
+   - KVから `${id}` をキーとして取得
    - データが存在しない場合は404
    - SavedResult型のデータをパース
 3. metaタグを動的に設定:
@@ -666,18 +666,19 @@ preview_bucket_name = "review-game-share-images-preview"
 
 ### Phase 5: レビュー結果の永続化とシェア機能の強化
 1. **結果保存機能**：
-   - レビュー評価結果をCloudflare KVに永続化
+   - レビュー評価結果をCloudflare KVに永続化（有効期限なし）
    - 各結果にユニークなID（UUID v4）を割り当て
+   - UUIDをそのままURLパスとKVキーに使用
    - 結果データには以下を含む：
      - スコア、言語、レベル
      - LLMフィードバック、strengths、improvements
      - 生成されたOG画像のURL
      - タイムスタンプ
+   - 個人情報は一切含まない（ゲームの評価結果のみ）
 2. **結果保存API**：
    - `/api/save-result` エンドポイントを実装
    - リクエスト: `{ score, language, level, feedback, strengths, improvements, imageUrl }`
    - レスポンス: `{ resultId, resultUrl }`
-   - レート制限を実装（スパム対策）
 3. **永続化された結果表示ページ**：
    - URL: `/result/{resultId}`
    - 保存された結果データを表示
@@ -723,14 +724,13 @@ preview_bucket_name = "review-game-share-images-preview"
   - 画像サイズの制限（最大5MB程度）
   - 不正なパラメータのバリデーション
 - **Phase 5: 結果保存のセキュリティ**：
-  - 結果保存APIのレート制限（1分間に5回まで、IPベース）
+  - 個人情報は一切含まない（ゲームの評価結果のみ）
   - UUID v4の適切な生成（推測不可能性）
   - KV書き込み時のデータバリデーション
   - 保存データのサイズ制限（最大10KB程度）
   - XSS対策：フィードバックテキストのサニタイゼーション
   - 不正なUUIDアクセスの防止（正規表現での検証）
-  - KVデータの有効期限設定（90日間で自動削除）
-  - 機密情報の非保存（ユーザー識別情報は含めない）
+  - データは永続保存（有効期限なし）
 
 ## 12. パフォーマンス最適化
 
@@ -903,7 +903,6 @@ preview_bucket_name = "review-game-share-images-preview"
 
 **エラーレスポンス**:
 - 400 Bad Request: バリデーションエラー
-- 429 Too Many Requests: レート制限超過
 - 500 Internal Server Error: KV書き込みエラー
 
 **実装例**:
@@ -914,8 +913,6 @@ import type { ActionFunctionArgs } from '@remix-run/cloudflare';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  // レート制限チェック（省略）
-
   const body = await request.json();
 
   // バリデーション
@@ -940,13 +937,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     createdAt: new Date().toISOString()
   };
 
-  // KVに保存（90日間の有効期限）
+  // KVに保存（UUIDをキーとして直接使用、有効期限なし）
   const RESULTS_KV = context.env.RESULTS_KV as KVNamespace;
-  await RESULTS_KV.put(
-    `result:${resultId}`,
-    JSON.stringify(savedResult),
-    { expirationTtl: 60 * 60 * 24 * 90 } // 90日間
-  );
+  await RESULTS_KV.put(resultId, JSON.stringify(savedResult));
 
   // レスポンスを返却
   const baseUrl = new URL(request.url).origin;
@@ -982,9 +975,9 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  // KVから結果を取得
+  // KVから結果を取得（UUIDをキーとして直接使用）
   const RESULTS_KV = context.env.RESULTS_KV as KVNamespace;
-  const resultJson = await RESULTS_KV.get(`result:${id}`);
+  const resultJson = await RESULTS_KV.get(id);
 
   if (!resultJson) {
     throw new Response('Not Found', { status: 404 });
@@ -1081,20 +1074,20 @@ export default function ResultPage() {
 ### C.3 KV操作のベストプラクティス
 
 **キーの命名規則**:
-- プレフィックス: `result:`
-- 完全なキー: `result:${uuid}`
-- 例: `result:a1b2c3d4-e5f6-7890-abcd-ef1234567890`
+- UUIDをそのままキーとして使用
+- プレフィックスなし
+- 例: `a1b2c3d4-e5f6-7890-abcd-ef1234567890`
 
-**有効期限の設定**:
+**保存時の設定**:
 ```typescript
-// 90日間（7,776,000秒）
-await RESULTS_KV.put(key, value, { expirationTtl: 60 * 60 * 24 * 90 });
+// 有効期限なし（永続保存）
+await RESULTS_KV.put(uuid, JSON.stringify(data));
 ```
 
 **エラーハンドリング**:
 ```typescript
 try {
-  await RESULTS_KV.put(key, value);
+  await RESULTS_KV.put(uuid, value);
 } catch (error) {
   console.error('KV put error:', error);
   return json({ error: 'Failed to save result' }, { status: 500 });
@@ -1105,5 +1098,45 @@ try {
 ```typescript
 // Cloudflare Workers KVは自動的にエッジでキャッシュされる
 // 追加のキャッシング設定は通常不要
-const value = await RESULTS_KV.get(key);
+const value = await RESULTS_KV.get(uuid);
 ```
+
+### C.4 国際化対応（i18n）
+
+**結果ページの多言語対応**:
+- 既存のi18n設定を活用（`app/i18n.ts`）
+- 結果ページのUIテキストを翻訳
+- ブラウザの言語設定に応じて表示言語を切り替え
+
+**翻訳が必要な要素**:
+```typescript
+// app/locales/ja.ts
+export default {
+  result: {
+    title: "Code Review Game - {score}点獲得！",
+    score: "{score}点",
+    feedback: "フィードバック",
+    strengths: "良かった点",
+    improvements: "改善点",
+    challenge: "挑戦する",
+    notFound: "結果が見つかりませんでした"
+  }
+}
+
+// app/locales/en.ts
+export default {
+  result: {
+    title: "Code Review Game - {score} points!",
+    score: "{score} points",
+    feedback: "Feedback",
+    strengths: "Strengths",
+    improvements: "Improvements",
+    challenge: "Start Challenge",
+    notFound: "Result not found"
+  }
+}
+```
+
+**OGPタグの国際化**:
+- OGPタグは常に日本語で固定（シェア先が主に日本のユーザー想定）
+- または、ユーザーの言語設定に応じて動的に生成
