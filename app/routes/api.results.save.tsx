@@ -152,17 +152,44 @@ export async function action({ request, context }: ActionFunctionArgs) {
   try {
     console.log("Received result save request");
 
-    // Check content type
+    // Parse request body (could be JSON or FormData)
+    let body: SaveResultRequest;
     const contentType = request.headers.get("content-type");
-    if (!contentType || !contentType.toLowerCase().includes("application/json")) {
-      return Response.json(
-        { error: "Content-Type must be application/json" },
-        { status: 400 }
-      );
-    }
 
-    // Parse request body
-    const body = (await request.json()) as SaveResultRequest;
+    if (contentType?.toLowerCase().includes("application/json")) {
+      // JSON format
+      const rawBody = (await request.json()) as Record<string, unknown>;
+
+      // Parse stringified arrays if necessary
+      const strengths = typeof rawBody.strengths === 'string'
+        ? JSON.parse(rawBody.strengths)
+        : rawBody.strengths;
+      const improvements = typeof rawBody.improvements === 'string'
+        ? JSON.parse(rawBody.improvements)
+        : rawBody.improvements;
+
+      body = {
+        ...rawBody,
+        strengths: strengths as string[],
+        improvements: improvements as string[],
+      } as SaveResultRequest;
+    } else {
+      // FormData format (fallback)
+      const formData = await request.formData();
+      const rawStrengths = formData.get("strengths") as string;
+      const rawImprovements = formData.get("improvements") as string;
+
+      body = {
+        score: Number(formData.get("score")),
+        language: formData.get("language") as string,
+        level: formData.get("level") as string,
+        feedback: formData.get("feedback") as string,
+        strengths: JSON.parse(rawStrengths),
+        improvements: JSON.parse(rawImprovements),
+        imageUrl: formData.get("imageUrl") as string,
+        locale: formData.get("locale") as string,
+      };
+    }
 
     // Validate data
     const validation = validateResultData(body);

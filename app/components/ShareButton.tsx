@@ -1,14 +1,15 @@
 /**
  * ShareButton Component
- * Provides social media sharing functionality using Web Share API
- * Generates share image and shares via native share dialog
- * Falls back to X Web Intent if Web Share API is not available
+ * Provides social media sharing functionality
+ * Generates share image, uploads to R2, saves to KV, and opens X share intent
  */
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "@iconify/react";
-import { generateShareImage, blobToFile } from "~/utils/imageGenerator";
+import { useFetcher } from "react-router";
+import { generateShareImage } from "~/utils/imageGenerator";
+import type { ShareResult, SaveResultResponse } from "~/types/problem";
 
 /**
  * Props for ShareButton component
@@ -57,19 +58,109 @@ export function ShareButton({
   // i18n translation hook
   const { t } = useTranslation(['share', 'common']);
 
+  // Fetchers for image upload and result save
+  const imageFetcher = useFetcher<ShareResult>();
+  const resultFetcher = useFetcher<SaveResultResponse>();
+
   // Client-side sharing state
   const [shareState, setShareState] = useState<ShareState>("idle");
   const [shareError, setShareError] = useState<string>("");
+  const [imageBase64, setImageBase64] = useState<string>("");
+
+  // Track if we've already opened the share dialog
+  const sharedRef = useRef(false);
+
+  /**
+   * Monitor image upload fetcher state
+   * When image is uploaded successfully, save result to KV
+   */
+  useEffect(() => {
+    if (imageFetcher.state === "idle" && imageFetcher.data) {
+      const imageUrl = imageFetcher.data.imageUrl;
+      if (imageUrl && resultFetcher.state === "idle" && !resultFetcher.data) {
+        // Submit to result save API as FormData
+        const formData = new FormData();
+        formData.append("score", score.toString());
+        formData.append("language", language);
+        formData.append("level", level);
+        formData.append("feedback", feedback);
+        formData.append("strengths", JSON.stringify(strengths));
+        formData.append("improvements", JSON.stringify(improvements));
+        formData.append("imageUrl", imageUrl);
+        formData.append("locale", locale);
+
+        resultFetcher.submit(formData, {
+          method: "POST",
+          action: "/api/results/save",
+        });
+      }
+    }
+  }, [imageFetcher.state, imageFetcher.data, resultFetcher.state, resultFetcher.data, score, language, level, feedback, strengths, improvements, locale]);
+
+  /**
+   * Monitor result save fetcher state
+   * When result is saved successfully, open X share intent
+   */
+  useEffect(() => {
+    if (resultFetcher.state === "idle" && resultFetcher.data && !sharedRef.current) {
+      const resultUrl = resultFetcher.data.url;
+      if (resultUrl) {
+        sharedRef.current = true;
+
+        // Generate X share text
+        const languageDisplayName = t(`common:language.${language}`, language);
+        const shareText = locale === 'ja'
+          ? `コードレビューゲーム powered by #CodeRabbit にて ${score}点を獲得しました！\n言語: ${languageDisplayName}\nレベル: ${level}\n\n${resultUrl}`
+          : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName}\nLevel: ${level}\n\n${resultUrl}`;
+
+        // Open X share intent
+        const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
+        window.open(tweetUrl, "_blank", "noopener,noreferrer");
+
+        setShareState("success");
+
+        // Reset state after success
+        setTimeout(() => {
+          setShareState("idle");
+          sharedRef.current = false;
+        }, 3000);
+      }
+    }
+  }, [resultFetcher.state, resultFetcher.data, score, language, level, locale, t]);
+
+  /**
+   * Monitor fetcher errors
+   */
+  useEffect(() => {
+    if (imageFetcher.state === "idle" && imageFetcher.data && 'error' in imageFetcher.data) {
+      setShareState("error");
+      setShareError(imageFetcher.data.error as string);
+      setTimeout(() => {
+        setShareState("idle");
+        setShareError("");
+      }, 5000);
+    }
+
+    if (resultFetcher.state === "idle" && resultFetcher.data && 'error' in resultFetcher.data) {
+      setShareState("error");
+      setShareError(resultFetcher.data.error as string);
+      setTimeout(() => {
+        setShareState("idle");
+        setShareError("");
+      }, 5000);
+    }
+  }, [imageFetcher.state, imageFetcher.data, resultFetcher.state, resultFetcher.data]);
 
   /**
    * Handles the share button click
-   * Generates image, uploads to R2, saves to KV, and opens X share intent
+   * Generates image and starts the upload process
    */
   const handleShare = async () => {
     try {
       // Reset error state
       setShareError("");
       setShareState("generating");
+      sharedRef.current = false;
 
       // Step 1: Generate image (client-side)
       const languageDisplayName = t(`common:language.${language}`, language);
@@ -77,7 +168,7 @@ export function ShareButton({
 
       // Step 2: Convert image to base64 for upload
       const reader = new FileReader();
-      const imageBase64 = await new Promise<string>((resolve, reject) => {
+      const base64 = await new Promise<string>((resolve, reject) => {
         reader.onloadend = () => {
           if (typeof reader.result === "string") {
             resolve(reader.result);
@@ -89,66 +180,20 @@ export function ShareButton({
         reader.readAsDataURL(imageBlob);
       });
 
-      // Step 3: Upload image to R2
-      const uploadResponse = await fetch(`/${locale}/${language}/${level}/result`, {
+      setImageBase64(base64);
+
+      // Step 3: Submit image upload using fetcher as FormData
+      const formData = new FormData();
+      formData.append("imageData", base64);
+      formData.append("score", score.toString());
+      formData.append("language", language);
+      formData.append("level", level);
+      formData.append("locale", locale);
+
+      imageFetcher.submit(formData, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          imageData: imageBase64,
-          score,
-          language,
-          level,
-          locale,
-        }),
+        action: `/${locale}/${language}/${level}/result`,
       });
-
-      if (!uploadResponse.ok) {
-        throw new Error("Failed to upload image");
-      }
-
-      const uploadResult = await uploadResponse.json() as { imageUrl: string };
-
-      // Step 4: Save result to KV
-      const saveResponse = await fetch("/api/results/save", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          score,
-          language,
-          level,
-          feedback,
-          strengths,
-          improvements,
-          imageUrl: uploadResult.imageUrl,
-          locale,
-        }),
-      });
-
-      if (!saveResponse.ok) {
-        throw new Error("Failed to save result");
-      }
-
-      const saveResult = await saveResponse.json() as { url: string };
-
-      // Step 5: Generate X share text
-      const shareText = locale === 'ja'
-        ? `コードレビューゲーム powered by #CodeRabbit にて ${score}点を獲得しました！\n言語: ${languageDisplayName}\nレベル: ${level}\n\n${saveResult.url}`
-        : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName}\nLevel: ${level}\n\n${saveResult.url}`;
-
-      // Step 6: Open X share intent
-      const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
-      window.open(tweetUrl, "_blank", "noopener,noreferrer");
-
-      setShareState("success");
-
-      // Reset state after success
-      setTimeout(() => {
-        setShareState("idle");
-      }, 3000);
     } catch (error) {
       console.error("Share error:", error);
 
@@ -166,9 +211,22 @@ export function ShareButton({
   };
 
   /**
+   * Update share state based on fetcher states
+   */
+  useEffect(() => {
+    if (imageFetcher.state === "submitting" || resultFetcher.state === "submitting") {
+      setShareState("generating");
+    }
+  }, [imageFetcher.state, resultFetcher.state]);
+
+  /**
    * Gets the button text based on current state
    */
   const getButtonText = (): string => {
+    if (imageFetcher.state === "submitting" || resultFetcher.state === "submitting") {
+      return t('share:button.generating', 'Generating...');
+    }
+
     switch (shareState) {
       case "generating":
         return t('share:button.generating', 'Generating...');
@@ -200,7 +258,10 @@ export function ShareButton({
   /**
    * Determines if the button should be disabled
    */
-  const isDisabled = shareState === "generating";
+  const isDisabled =
+    shareState === "generating" ||
+    imageFetcher.state === "submitting" ||
+    resultFetcher.state === "submitting";
 
   /**
    * Gets button color classes based on state

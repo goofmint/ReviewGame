@@ -85,28 +85,42 @@ interface ShareImageRequest {
 export async function action({ request, context }: Route.ActionArgs) {
   try {
     console.log("Received share image upload request");
-    // Check content type
+
+    // Parse request body (support both JSON and FormData)
+    let imageData: string;
+    let language: string;
+    let level: string;
+    let score: number;
+    let locale: string;
+
     const contentType = request.headers.get("content-type");
-    if (!contentType || !contentType.includes("application/json")) {
-      return Response.json(
-        { error: "Content-Type must be application/json" },
-        { status: 400 }
-      );
+
+    if (contentType?.includes("application/json")) {
+      // JSON format
+      const body = (await request.json()) as ShareImageRequest;
+      imageData = body.imageData;
+      language = body.language;
+      level = body.level;
+      locale = body.locale;
+      score = typeof body.score === "string" ? parseInt(body.score, 10) : body.score;
+    } else {
+      // FormData format
+      const formData = await request.formData();
+      imageData = formData.get("imageData") as string;
+      language = formData.get("language") as string;
+      level = formData.get("level") as string;
+      locale = formData.get("locale") as string;
+      const scoreStr = formData.get("score") as string;
+      score = parseInt(scoreStr, 10);
     }
 
-    // Parse request body
-    const body = (await request.json()) as ShareImageRequest;
     // Validate required fields
-    if (!body.imageData || !body.language || !body.level) {
+    if (!imageData || !language || !level) {
       return Response.json(
         { error: "Missing required fields: imageData, language, level" },
         { status: 400 }
       );
     }
-
-    // Parse score (may be string from useFetcher)
-    const score =
-      typeof body.score === "string" ? parseInt(body.score, 10) : body.score;
 
     // Validate score
     if (
@@ -121,7 +135,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       );
     }
     // Validate image payload before conversion/upload
-    const validatedImage = validateBase64ImagePayload(body.imageData);
+    const validatedImage = validateBase64ImagePayload(imageData);
     if (!validatedImage) {
       return Response.json(
         { error: "Invalid or too large imageData" },
@@ -146,8 +160,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     // Generate storage key
     const timestamp = Date.now();
     const storageKey = generateStorageKey(
-      body.language,
-      body.level,
+      language,
+      level,
       timestamp
     );
 
@@ -166,8 +180,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     const imageUrl = getPublicUrl(storageKey, publicUrl);
 
     // Generate tweet text and X intent URL
-    const locale = body.locale || "en";
-    const tweetText = generateTweetText(score, body.language, body.level, locale);
+    const tweetText = generateTweetText(score, language, level, locale);
     const tweetUrl = generateXIntentUrl(tweetText, imageUrl);
 
     // Return result
