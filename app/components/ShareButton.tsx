@@ -90,7 +90,7 @@ export function ShareButton({
       console.log("Image URL:", imageUrl);
 
       if (imageUrl && resultFetcher.state === "idle" && !resultFetcher.data) {
-        console.log("Submitting to result save API with:", {
+        console.log("Submitting to result save with:", {
           score,
           language,
           level,
@@ -101,8 +101,9 @@ export function ShareButton({
           locale,
         });
 
-        // Submit to result save API as FormData
+        // Submit to result page's action with saveResult intent
         const formData = new FormData();
+        formData.append("intent", "saveResult");
         formData.append("score", score.toString());
         formData.append("language", language);
         formData.append("level", level);
@@ -114,7 +115,7 @@ export function ShareButton({
 
         resultFetcher.submit(formData, {
           method: "POST",
-          action: "/api/results/save",
+          action: `/${locale}/${language}/${level}/result`,
         });
       }
     }
@@ -221,6 +222,7 @@ export function ShareButton({
 
       // Step 3: Submit image upload using fetcher as FormData
       const formData = new FormData();
+      formData.append("intent", "uploadImage");
       formData.append("imageData", base64);
       formData.append("score", score.toString());
       formData.append("language", language);
