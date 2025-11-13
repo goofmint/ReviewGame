@@ -31,11 +31,10 @@ export function Header() {
               href="https://github.com/goofmint/ReviewGame"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              className="flex items-center justify-center w-10 h-10 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
               aria-label="View source on GitHub"
             >
-              <Icon icon="mdi:github" width={20} height={20} />
-              <span className="hidden sm:inline">GitHub</span>
+              <Icon icon="mdi:github" width={24} height={24} />
             </a>
 
             {/* CodeRabbit Link */}
@@ -43,11 +42,14 @@ export function Header() {
               href="https://www.coderabbit.ai/"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-all shadow-sm hover:shadow-md"
+              className="flex items-center justify-center w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-lg transition-all shadow-sm hover:shadow-md"
               aria-label="Visit CodeRabbit"
             >
-              <Icon icon="mdi:rabbit" width={20} height={20} />
-              <span className="hidden sm:inline">CodeRabbit</span>
+              <img
+                src="/images/coderabbit-icon.svg"
+                alt="CodeRabbit"
+                className="w-6 h-6"
+              />
             </a>
           </div>
         </div>
