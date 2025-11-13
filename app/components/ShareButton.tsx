@@ -76,8 +76,31 @@ export function ShareButton({
    */
   useEffect(() => {
     if (imageFetcher.state === "idle" && imageFetcher.data) {
+      console.log("Image fetcher data:", imageFetcher.data);
+
+      // Check if there's an error in the response
+      if ('error' in imageFetcher.data) {
+        console.error("Image upload error:", imageFetcher.data.error);
+        setShareState("error");
+        setShareError(imageFetcher.data.error as string);
+        return;
+      }
+
       const imageUrl = imageFetcher.data.imageUrl;
+      console.log("Image URL:", imageUrl);
+
       if (imageUrl && resultFetcher.state === "idle" && !resultFetcher.data) {
+        console.log("Submitting to result save API with:", {
+          score,
+          language,
+          level,
+          feedback: feedback.substring(0, 50) + "...",
+          strengthsCount: strengths.length,
+          improvementsCount: improvements.length,
+          imageUrl,
+          locale,
+        });
+
         // Submit to result save API as FormData
         const formData = new FormData();
         formData.append("score", score.toString());
@@ -103,7 +126,19 @@ export function ShareButton({
    */
   useEffect(() => {
     if (resultFetcher.state === "idle" && resultFetcher.data && !sharedRef.current) {
+      console.log("Result fetcher data:", resultFetcher.data);
+
+      // Check if there's an error in the response
+      if ('error' in resultFetcher.data) {
+        console.error("Result save error:", resultFetcher.data.error);
+        setShareState("error");
+        setShareError(resultFetcher.data.error as string);
+        return;
+      }
+
       const resultUrl = resultFetcher.data.url;
+      console.log("Result URL:", resultUrl);
+
       if (resultUrl) {
         sharedRef.current = true;
 
@@ -112,6 +147,8 @@ export function ShareButton({
         const shareText = locale === 'ja'
           ? `コードレビューゲーム powered by #CodeRabbit にて ${score}点を獲得しました！\n言語: ${languageDisplayName}\nレベル: ${level}\n\n${resultUrl}`
           : `I scored ${score} points on #CodeRabbit Code Review Game!\nLanguage: ${languageDisplayName}\nLevel: ${level}\n\n${resultUrl}`;
+
+        console.log("Opening X share dialog with text:", shareText);
 
         // Open X share intent
         const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;

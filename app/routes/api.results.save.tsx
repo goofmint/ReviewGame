@@ -176,24 +176,34 @@ export async function action({ request, context }: ActionFunctionArgs) {
     } else {
       // FormData format (fallback)
       const formData = await request.formData();
-      const rawStrengths = formData.get("strengths") as string;
-      const rawImprovements = formData.get("improvements") as string;
+
+      console.log("FormData entries:");
+      for (const [key, value] of formData.entries()) {
+        console.log(`  ${key}: ${value}`);
+      }
+
+      const rawStrengths = formData.get("strengths") as string | null;
+      const rawImprovements = formData.get("improvements") as string | null;
+      const rawScore = formData.get("score") as string | null;
 
       body = {
-        score: Number(formData.get("score")),
-        language: formData.get("language") as string,
-        level: formData.get("level") as string,
-        feedback: formData.get("feedback") as string,
-        strengths: JSON.parse(rawStrengths),
-        improvements: JSON.parse(rawImprovements),
-        imageUrl: formData.get("imageUrl") as string,
-        locale: formData.get("locale") as string,
+        score: rawScore ? Number(rawScore) : 0,
+        language: (formData.get("language") as string) || "",
+        level: (formData.get("level") as string) || "",
+        feedback: (formData.get("feedback") as string) || "",
+        strengths: rawStrengths ? JSON.parse(rawStrengths) : [],
+        improvements: rawImprovements ? JSON.parse(rawImprovements) : [],
+        imageUrl: (formData.get("imageUrl") as string) || "",
+        locale: (formData.get("locale") as string) || "",
       };
+
+      console.log("Parsed body:", JSON.stringify(body, null, 2));
     }
 
     // Validate data
     const validation = validateResultData(body);
     if (!validation.valid) {
+      console.error("Validation failed:", validation.error);
       return Response.json({ error: validation.error }, { status: 400 });
     }
 
