@@ -31,7 +31,8 @@
 	"kv_namespaces": [
 		{
 			"id": "38771fb0b85b481c8382f456a4bb729b",
-			"binding": "RESULTS_KV"
+			"binding": "RESULTS_KV",
+			"preview_id": "38771fb0b85b481c8382f456a4bb729b"
 		}
 	],
 	/**
