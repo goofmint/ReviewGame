@@ -35,17 +35,24 @@ interface LoaderData {
  * Loader function - fetches saved result from KV
  */
 export async function loader({ params, context }: LoaderFunctionArgs) {
+  console.log("Results loader called with params:", params);
   const { id } = params;
 
   if (!id) {
+    console.error("Result ID is missing");
     throw new Response("Result ID is required", { status: 400 });
   }
 
+  console.log("Looking up result ID:", id);
+
   // Get KV namespace from context
   const env = context.cloudflare?.env as Env | undefined;
+  console.log("Environment available:", !!env);
+  console.log("RESULTS_KV binding available:", !!env?.RESULTS_KV);
+
   const kv = env?.RESULTS_KV;
   if (!kv) {
-    console.error("RESULTS_KV binding is missing");
+    console.error("RESULTS_KV binding is missing - env:", env);
     throw new Response("Result storage configuration is missing", {
       status: 500,
     });
@@ -53,14 +60,18 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
 
   // Fetch result from KV
   const key = `result:${id}`;
+  console.log("Fetching from KV with key:", key);
   const resultJson = await kv.get(key);
+  console.log("KV result:", resultJson ? "found" : "not found");
 
   if (!resultJson) {
+    console.error("Result not found in KV for key:", key);
     throw new Response("Result not found", { status: 404 });
   }
 
   try {
     const result = JSON.parse(resultJson) as SavedResult;
+    console.log("Successfully parsed result:", result.id);
     return { result };
   } catch (error) {
     console.error("Failed to parse result data:", error);

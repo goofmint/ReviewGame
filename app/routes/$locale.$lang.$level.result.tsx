@@ -334,7 +334,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
       // Generate result URL
       const requestOrigin = request.headers.get("origin") || new URL(request.url).origin;
-      const resultUrl = `${requestOrigin}/results/${id}`;
+      const resultUrl = `${requestOrigin}/r/${id}`;
 
       // Return response
       const response: SaveResultResponse = {
