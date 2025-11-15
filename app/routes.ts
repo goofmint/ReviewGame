@@ -4,6 +4,7 @@ export default [
   index("routes/_index.tsx"),
   route("share-preview", "routes/share-preview.tsx"),
   route("api/share-image", "routes/api.share-image.tsx"),
+  route("r/:id", "routes/r.$id.tsx"),
   route(":locale", "routes/$locale._index.tsx"),
   route(":locale/:lang", "routes/$locale.$lang._index.tsx"),
   route(":locale/:lang/:level", "routes/$locale.$lang.$level.tsx"),

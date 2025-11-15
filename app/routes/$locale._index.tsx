@@ -24,6 +24,13 @@ export async function loader({ params }: LoaderFunctionArgs) {
   return { locale };
 }
 
+export function meta() {
+  return [
+    { title: "Code Review Game - Choose Your Language" },
+    { name: "description", content: "Improve your code review skills by playing interactive coding challenges powered by CodeRabbit AI" },
+  ];
+}
+
 export default function LanguageSelection() {
   const { locale } = useParams();
   const { t, ready } = useTranslation(['common', 'game']);

@@ -94,7 +94,26 @@ export async function action({
     });
   }
 
-  const body = (await request.json()) as EvaluationRequestBody;
+  // Parse request body (support both JSON and FormData)
+  let body: EvaluationRequestBody;
+  const contentType = request.headers.get("content-type");
+
+  if (contentType?.includes("application/json")) {
+    // JSON format
+    body = (await request.json()) as EvaluationRequestBody;
+  } else {
+    // FormData format
+    const formData = await request.formData();
+    body = {
+      code: formData.get("code") as string,
+      requirements: formData.get("requirements") as string,
+      review: formData.get("review") as string,
+      language: formData.get("language") as string,
+      level: formData.get("level") as string,
+      locale: formData.get("locale") as string,
+    };
+  }
+
   const env = context?.cloudflare?.env as
     | { GEMINI_API_KEY?: string }
     | undefined;

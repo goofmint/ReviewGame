@@ -22,7 +22,19 @@
 			"bucket_name": "review-game-share-images",
 			"preview_bucket_name": "review-game-share-images-preview"
 		}
-	]
+	],
+	/**
+	 * KV Namespaces
+	 * Storage for saved review results
+	 * https://developers.cloudflare.com/kv/
+	 */
+	"kv_namespaces": [
+		{
+			"id": "38771fb0b85b481c8382f456a4bb729b",
+			"binding": "RESULTS_KV",
+			"preview_id": "38771fb0b85b481c8382f456a4bb729b"
+		}
+	],
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
