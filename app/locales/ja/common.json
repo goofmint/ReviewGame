@@ -16,12 +16,14 @@
     "javascript": "JavaScript",
     "python": "Python",
     "flutter": "Flutter",
+    "c": "C言語",
     "codeReviewGame": "コードレビューゲーム"
   },
   "languageDescription": {
     "javascript": "Web開発の基礎言語",
     "python": "データ分析・AI開発",
-    "flutter": "モバイルアプリ開発"
+    "flutter": "モバイルアプリ開発",
+    "c": "システムプログラミング"
   },
   "locale": {
     "ja": "日本語",

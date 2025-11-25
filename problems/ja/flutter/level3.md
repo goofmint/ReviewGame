@@ -61,6 +61,7 @@ class _ItemListWidgetState extends State<ItemListWidget> {
 # 評価基準
 
 LLMがユーザーのレビューを評価する際の基準：
+- ColumnをListView.builderに変更する必要があります（すべてのアイテムが一度にメモリ上に構築されます）
 - ListView.builderを使用していないパフォーマンス問題を指摘できているか（すべてのウィジェットが一度に生成される）
 - Columnの代わりにListViewを使うべきことを指摘できているか（スクロール可能性）
 - 不要な再描画を避けるための最適化（const、Key）の提案ができているか
