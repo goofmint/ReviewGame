@@ -64,6 +64,7 @@ function normalizeLanguage(language: string): string {
     python: "python",
     flutter: "dart",
     dart: "dart",
+    c: "c",
   };
 
   return languageMap[language.toLowerCase()] || "javascript";

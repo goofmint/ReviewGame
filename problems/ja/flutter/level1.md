@@ -38,8 +38,11 @@ class UserCard extends StatelessWidget {
 # 評価基準
 
 LLMがユーザーのレビューを評価する際の基準：
-- Paddingの欠如を指摘できているか（UIの見た目）
-- テキストのオーバーフローハンドリング（overflow: TextOverflow.ellipsis）の欠如を指摘できているか
-- null安全性の考慮（nullable パラメータまたはデフォルト値）の欠如を指摘できているか
-- アクセシビリティ（Semantics）の欠如を指摘できているか
-- constコンストラクタの使用提案ができているか（パフォーマンス向上）
+- null値の処理とconstコンストラクタが必要であることを指摘できているか
+  StatelessWidgetのコンストラクタはパフォーマンス向上のためconstにすべきです。
+- Paddingの欠如の指摘
+  Cardの内部にpaddingがないため、テキストがカードの端に接触し、見た目が悪くなります
+- テキストオーバーフロー処理の欠如の指摘
+  長いテキストが渡された場合、レイアウトが崩れる可能性があります。overflow: TextOverflow.ellipsisとmaxLinesを指定すべきです
+- アクセシビリティの欠如の指摘
+  スクリーンリーダーのためにSemanticsウィジェットでラベルを提供すべきです
